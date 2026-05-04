@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrea <auguccioni15@gmail.com>
+Date: Sat, 3 May 2026 00:00:00 +0000
+Subject: [PATCH] arm: mach-stm32mp: restore config.mk for non-FIP stm32image
+ generation
+
+U-Boot 2023.10 removed arch/arm/mach-stm32mp/config.mk, which defined
+the u-boot.stm32 make target used by ISAR's non-FIP boot chain.
+Restore it and update the load/entry address variable from
+CONFIG_SYS_TEXT_BASE (removed in 2022.10) to CONFIG_TEXT_BASE.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ arch/arm/mach-stm32mp/config.mk | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 arch/arm/mach-stm32mp/config.mk
+
+diff --git a/arch/arm/mach-stm32mp/config.mk b/arch/arm/mach-stm32mp/config.mk
+new file mode 100644
+--- /dev/null
++++ b/arch/arm/mach-stm32mp/config.mk
+@@ -0,0 +1,16 @@
++# SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause
++#
++# Copyright (C) 2018, STMicroelectronics - All Rights Reserved
++#
++
++INPUTS-y += u-boot.stm32
++
++MKIMAGEFLAGS_u-boot.stm32 = -T stm32image -a $(CONFIG_TEXT_BASE) -e $(CONFIG_TEXT_BASE)
++
++u-boot.stm32: MKIMAGEOUTPUT = u-boot.stm32.log
++
++u-boot.stm32: u-boot.bin FORCE
++	$(call if_changed,mkimage)
++
++MKIMAGEFLAGS_u-boot-spl.stm32 = -T stm32image -a $(CONFIG_SPL_TEXT_BASE) -e $(CONFIG_SPL_TEXT_BASE)
++

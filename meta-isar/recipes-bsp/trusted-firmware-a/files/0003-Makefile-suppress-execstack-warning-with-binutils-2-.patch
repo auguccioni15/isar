@@ -1,0 +1,36 @@
+From: Andrea <auguccioni15@gmail.com>
+Date: Thu, 01 May 2026 00:00:00 +0000
+Subject: [PATCH] Makefile: suppress execstack warning with binutils 2.40
+
+binutils 2.40 introduced a linker warning when an object file is missing
+the .note.GNU-stack section, implying an executable stack.  TF-A builds
+with --fatal-warnings, so this warning becomes a fatal error.
+
+Add --no-warn-execstack (available since binutils 2.39) to the ld and
+gcc linker flag sets to silence the warning without disabling all other
+fatal-warning checks.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ Makefile | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -378,6 +378,7 @@ else ifneq ($(findstring gcc,$(notdir $(LD))),)
+ # Pass ld options with Wl or Xlinker switches
+ TF_LDFLAGS		+=	-Wl,--fatal-warnings -O1
+ TF_LDFLAGS		+=	-Wl,--gc-sections
++TF_LDFLAGS		+=	-Wl,--no-warn-execstack
+ ifeq ($(ENABLE_LTO),1)
+ 	ifeq (${ARCH},aarch64)
+ 		TF_LDFLAGS	+=	-flto -fuse-linker-plugin
+@@ -395,6 +396,7 @@ TF_LDFLAGS		+=	$(subst --,-Xlinker --,$(TF_LDFLAGS_$(ARCH)))
+ else
+ TF_LDFLAGS		+=	--fatal-warnings -O1
+ TF_LDFLAGS		+=	--gc-sections
++TF_LDFLAGS		+=	--no-warn-execstack
+ # ld.lld doesn't recognize the errata flags,
+ # therefore don't add those in that case
+ ifeq ($(findstring ld.lld,$(notdir $(LD))),)

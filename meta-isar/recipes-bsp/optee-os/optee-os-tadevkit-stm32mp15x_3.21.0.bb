@@ -5,6 +5,8 @@
 
 MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
+OPTEE_NAME = "stm32mp15x"
+
 inherit optee-os-tadevkit
 
 require optee-os-stm32mp15x_${PV}.inc

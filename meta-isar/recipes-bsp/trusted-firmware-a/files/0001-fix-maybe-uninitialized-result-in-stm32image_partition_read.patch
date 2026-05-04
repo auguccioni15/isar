@@ -1,0 +1,26 @@
+From: Fix uninitialized variable warning in stm32image_partition_read
+Date: Thu, 01 May 2026 00:00:00 +0000
+Subject: [PATCH] drivers/st/io: initialize result in stm32image_partition_read
+
+GCC raises -Werror=maybe-uninitialized on 'result' because code paths
+that skip into the while-loop body may reach a use of 'result' without
+passing through an assignment first.  Initialize to 0 (success) to
+silence the warning and match the intended default return value.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ drivers/st/io/io_stm32image.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/st/io/io_stm32image.c b/drivers/st/io/io_stm32image.c
+index 1234567..abcdefg 100644
+--- a/drivers/st/io/io_stm32image.c
++++ b/drivers/st/io/io_stm32image.c
+@@ -246,7 +246,7 @@ static int stm32image_partition_read(io_entity_t *entity, uintptr_t buffer,
+ 				     size_t length, size_t *length_read)
+ {
+-	int result;
++	int result = 0;
+ 	uint8_t *local_buffer;
+ 	boot_api_image_header_t *header =
+ 		(boot_api_image_header_t *)first_lba_buffer;

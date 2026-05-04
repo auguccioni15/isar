@@ -1,0 +1,8 @@
+header:
+  version: 14
+  includes:
+    - isar.yaml
+
+machine: stm32mp157f-dk2
+distro: debian-bookworm
+target: isar-image-base

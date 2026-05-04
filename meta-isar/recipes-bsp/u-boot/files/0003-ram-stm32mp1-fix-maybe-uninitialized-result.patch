@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrea <auguccioni15@gmail.com>
+Date: Thu, 1 May 2026 00:00:00 +0000
+Subject: [PATCH] ram: stm32mp1: fix maybe-uninitialized warning for result
+
+GCC's -Werror=maybe-uninitialized fires because execution can enter the
+while body and reach uses of result (e.g. the printf at end:) without
+passing through any assignment. Initialize to 0 (success) since the
+function returns 0 on the happy path.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ drivers/ram/stm32mp1/stm32mp1_interactive.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/ram/stm32mp1/stm32mp1_interactive.c b/drivers/ram/stm32mp1/stm32mp1_interactive.c
+index 1111111..2222222 100644
+--- a/drivers/ram/stm32mp1/stm32mp1_interactive.c
++++ b/drivers/ram/stm32mp1/stm32mp1_interactive.c
+@@ -333,7 +333,7 @@ static void stm32mp1_ddr_subcmd(struct ddr_info *priv,
+ {
+ 	int i;
+ 	unsigned long value;
+-	int result;
++	int result = 0;
+ 	char string[50] = "";
+
+ 	if (argc == 1) {
