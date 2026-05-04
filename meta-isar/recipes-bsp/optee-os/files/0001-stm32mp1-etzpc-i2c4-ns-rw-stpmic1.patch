@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: isar-users <isar-users@googlegroups.com>
+Date: Fri, 02 May 2026 00:00:00 +0000
+Subject: [PATCH] stm32mp1: etzpc: allow non-secure access to I2C4 for STPMIC1
+
+The STM32MP157C-DK2 board connects STPMIC1 to I2C4 (0x5c002000).
+Both Linux kernel and OP-TEE DTS reference &i2c4 for the PMIC, but
+main.c locks I2C4 as ETZPC_DECPROT_S_RW preventing Linux from accessing
+the PMIC. Change to NS_RW so Linux can access STPMIC1; OP-TEE retains
+access from secure world.
+
+Signed-off-by: isar-users <isar-users@googlegroups.com>
+---
+ core/arch/arm/plat-stm32mp1/main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/core/arch/arm/plat-stm32mp1/main.c b/core/arch/arm/plat-stm32mp1/main.c
+--- a/core/arch/arm/plat-stm32mp1/main.c
++++ b/core/arch/arm/plat-stm32mp1/main.c
+@@ -202,8 +202,8 @@
+ 	/* HASH is secure */
+ 	config_lock_decprot(STM32MP1_ETZPC_HASH_ID, ETZPC_DECPROT_S_RW);
+ 	config_lock_decprot(STM32MP1_ETZPC_I2C3_ID, ETZPC_DECPROT_NS_RW);
+-	/* I2C4 is secure */
+-	config_lock_decprot(STM32MP1_ETZPC_I2C4_ID, ETZPC_DECPROT_S_RW);
++	/* I2C4: NS_RW to allow Linux access to STPMIC1 on DK2 */
++	config_lock_decprot(STM32MP1_ETZPC_I2C4_ID, ETZPC_DECPROT_NS_RW);
+ 	config_lock_decprot(STM32MP1_ETZPC_I2C5_ID, ETZPC_DECPROT_NS_RW);
+ 	/* IWDG1 is secure */
+ 	config_lock_decprot(STM32MP1_ETZPC_IWDG1_ID, ETZPC_DECPROT_S_RW);
