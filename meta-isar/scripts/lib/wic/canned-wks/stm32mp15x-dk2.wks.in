@@ -1,0 +1,34 @@
+#
+# Copyright (c) Siemens AG, 2020-2025
+#
+# SPDX-License-Identifier: MIT
+#
+# ST standard partition layout for STM32MP15x DK2 boards (C/F variants)
+#
+# Boot chain: ROM -> fsbl (TF-A BL2) -> teeh/teed/teex (OP-TEE BL32)
+#                                     -> ssbl (U-Boot BL33) -> bootfs/rootfs (Linux)
+#
+# Partition names are read by the ST ROM code to locate bootloaders.
+
+# First Stage Boot Loader (TF-A) - two copies for fail-safe boot
+part fsbl1 --part-name fsbl1 --source rawcopy --sourceparams "file=/usr/lib/trusted-firmware-a/stm32mp15x/tf-a-stm32mp157c-dk2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 512K
+
+part fsbl2 --part-name fsbl2 --source rawcopy --sourceparams "file=/usr/lib/trusted-firmware-a/stm32mp15x/tf-a-stm32mp157c-dk2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 512K
+
+# Second Stage Boot Loader (U-Boot)
+part ssbl --part-name ssbl --source rawcopy --sourceparams "file=/usr/lib/u-boot/stm32mp15x/u-boot.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 2048K
+
+# OP-TEE (loaded by TF-A as BL32)
+part teeh --part-name teeh --source rawcopy --sourceparams "file=/usr/lib/optee-os/stm32mp15x/tee-header_v2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 512K
+
+part teed --part-name teed --source rawcopy --sourceparams "file=/usr/lib/optee-os/stm32mp15x/tee-pageable_v2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 1024K
+
+part teex --part-name teex --source rawcopy --sourceparams "file=/usr/lib/optee-os/stm32mp15x/tee-pager_v2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 512K
+
+# Boot partition (FAT32) - kernel, DTB, boot script (ST standard)
+part /boot --part-name bootfs --source bootimg-partition --fstype vfat --label bootfs --fixed-size 64M --align 1024
+
+# Root filesystem
+part / --source rootfs-u-boot --fstype ext4 --mkfs-extraopts "-T default" --label rootfs --align 1024 --active --use-uuid
+
+bootloader --ptable gpt --append="rootwait rw console=ttySTM0,115200"
