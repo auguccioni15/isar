@@ -7,9 +7,11 @@
 
 DESCRIPTION ?= "Custom U-Boot"
 
-PROVIDES += "u-boot-${MACHINE} u-boot-${MACHINE}-dev"
+UBOOT_NAME ?= "${MACHINE}"
+
+PROVIDES += "u-boot-${UBOOT_NAME} u-boot-${UBOOT_NAME}-dev"
 PROVIDES += "${@'u-boot-tools' if bb.utils.to_boolean(d.getVar('U_BOOT_TOOLS_PACKAGE')) else ''}"
-PROVIDES += "${@('u-boot-config u-boot-' + d.getVar('MACHINE') + '-config') \
+PROVIDES += "${@('u-boot-config u-boot-' + d.getVar('UBOOT_NAME') + '-config') \
     if bb.utils.to_boolean(d.getVar('U_BOOT_CONFIG_PACKAGE')) else ''}"
 
 inherit dpkg
@@ -24,7 +26,7 @@ U_BOOT_BIN_INSTALL ?= "${U_BOOT_BIN}"
 U_BOOT_EXTRA_BUILDARGS ??= "BL31=${BL31} TEE=${TEE}"
 
 TEMPLATE_FILES = "debian/control.tmpl debian/rules.tmpl"
-TEMPLATE_VARS += "MACHINE DEBIAN_BUILD_DEPENDS U_BOOT_CONFIG U_BOOT_BIN \
+TEMPLATE_VARS += "MACHINE UBOOT_NAME DEBIAN_BUILD_DEPENDS U_BOOT_CONFIG U_BOOT_BIN \
     U_BOOT_EXTRA_BUILDARGS DEBIAN_COMPAT DEBIAN_STANDARDS_VERSION"
 
 U_BOOT_TOOLS_PACKAGE ?= "0"
@@ -35,14 +37,14 @@ do_prepare_build() {
 
     deb_add_changelog
 
-    rm -f ${S}/debian/u-boot-${MACHINE}.install
+    rm -f ${S}/debian/u-boot-${UBOOT_NAME}.install
     for bin in ${U_BOOT_BIN_INSTALL}; do
-        echo "$bin /usr/lib/u-boot/${MACHINE}" >> \
-            ${S}/debian/u-boot-${MACHINE}.install
+        echo "$bin /usr/lib/u-boot/${UBOOT_NAME}" >> \
+            ${S}/debian/u-boot-${UBOOT_NAME}.install
     done
 
     echo "tools/env/libubootenv.a usr/lib" > \
-        ${S}/debian/u-boot-${MACHINE}-dev.install
+        ${S}/debian/u-boot-${UBOOT_NAME}-dev.install
 
     if [ "${U_BOOT_TOOLS_PACKAGE}" = "1" ]; then
         cat <<EOF >>${S}/debian/control
@@ -60,13 +62,13 @@ EOF
 
         cat <<EOF >>${S}/debian/control
 
-Package: u-boot-${MACHINE}-config
+Package: u-boot-${UBOOT_NAME}-config
 Provides: u-boot-config
 Architecture: ${DISTRO_ARCH}
 Description: ${DESCRIPTION}, environment configuration
 EOF
 
-        cat <<EOF >>${S}/debian/u-boot-${MACHINE}-config.install
+        cat <<EOF >>${S}/debian/u-boot-${UBOOT_NAME}-config.install
 u-boot-initial-env /etc
 fw_env.config      /etc
 EOF
