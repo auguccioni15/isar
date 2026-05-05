@@ -26,7 +26,7 @@ part teed --part-name teed --source rawcopy --sourceparams "file=/usr/lib/optee-
 part teex --part-name teex --source rawcopy --sourceparams "file=/usr/lib/optee-os/stm32mp15x/tee-pager_v2.stm32" --fstype=ext4 --fsoptions "noauto" --part-type 0x8301 --fixed-size 512K
 
 # Boot partition (FAT32) - kernel, DTB, boot script (ST standard)
-part /boot --part-name bootfs --source bootimg-partition --fstype vfat --label bootfs --fixed-size 64M --align 1024
+part /boot --part-name bootfs --source bootimg-partition --fstype vfat --label bootfs --fixed-size 64M --align 1024 --use-uuid
 
 # Root filesystem
 part / --source rootfs-u-boot --fstype ext4 --mkfs-extraopts "-T default" --label rootfs --align 1024 --active --use-uuid
