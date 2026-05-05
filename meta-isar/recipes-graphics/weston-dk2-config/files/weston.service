@@ -1,6 +1,6 @@
 [Unit]
 Description=Weston Wayland Compositor
-After=systemd-udevd.service
+After=systemd-udevd.service systemd-logind.service
 ConditionPathExists=/dev/dri/card0
 
 [Service]
@@ -9,8 +9,7 @@ ExecStartPre=/bin/mkdir -p /run/user/0
 ExecStartPre=/bin/chmod 700 /run/user/0
 ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2
 Restart=on-failure
-StandardInput=tty
-TTYPath=/dev/tty2
+PAMName=login
 
 [Install]
 WantedBy=multi-user.target
