@@ -8,7 +8,7 @@ MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
 inherit dpkg-raw
 
-DEBIAN_DEPENDS = "weston wvkbd"
+DEBIAN_DEPENDS = "weston"
 
 SRC_URI = "file://weston.service \
            file://wvkbd.service"
