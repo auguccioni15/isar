@@ -8,10 +8,11 @@ MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
 inherit dpkg-raw
 
-DEBIAN_DEPENDS = "weston"
+DEBIAN_DEPENDS = "weston, weston-terminal"
 
 SRC_URI = "file://weston.service \
-           file://wvkbd.service"
+           file://wvkbd.service \
+           file://weston.ini"
 
 COMPATIBLE_MACHINE = "^(stm32mp157c-dk2|stm32mp157f-dk2)$"
 
@@ -24,4 +25,6 @@ do_install() {
     install -m 0644 ${WORKDIR}/wvkbd.service ${D}/lib/systemd/system/wvkbd.service
     ln -sf /lib/systemd/system/wvkbd.service \
         ${D}/lib/systemd/system/multi-user.target.wants/wvkbd.service
+    install -d ${D}/etc/xdg/weston
+    install -m 0644 ${WORKDIR}/weston.ini ${D}/etc/xdg/weston/weston.ini
 }
