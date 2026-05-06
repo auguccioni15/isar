@@ -11,6 +11,7 @@
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&gpioh 4 GPIO_ACTIVE_LOW>;
+		post-power-on-delay-ms = <100>;
 	};
 };
 
