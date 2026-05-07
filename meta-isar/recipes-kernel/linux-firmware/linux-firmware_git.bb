@@ -34,13 +34,26 @@ do_install() {
     install -m 0644 ${S}/cypress/cyfmac43430-sdio.bin       ${D}/lib/firmware/cypress/
     install -m 0644 ${S}/cypress/cyfmac43430-sdio.clm_blob  ${D}/lib/firmware/cypress/
 
-    # NVRAM calibrato per il modulo Murata 1DX (montato sul DK2)
-    install -m 0644 ${S}/brcm/brcmfmac43430-sdio.MUR1DX.txt ${D}/lib/firmware/brcm/
+    # NVRAM board-specific (aggiunto in linux-firmware da ST per il DK2)
+    # ha la precedenza sul generico MUR1DX
+    if [ -f ${S}/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.txt ]; then
+        install -m 0644 ${S}/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.txt \
+            ${D}/lib/firmware/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.txt
+    else
+        install -m 0644 ${S}/brcm/brcmfmac43430-sdio.MUR1DX.txt ${D}/lib/firmware/brcm/
+        ln -sf brcmfmac43430-sdio.MUR1DX.txt \
+            ${D}/lib/firmware/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.txt
+    fi
 
-    # Symlink di compatibilita': brcmfmac cerca i file in brcm/
+    # Symlink generici: brcmfmac cerca i file in brcm/
     ln -sf ../cypress/cyfmac43430-sdio.bin      ${D}/lib/firmware/brcm/brcmfmac43430-sdio.bin
     ln -sf ../cypress/cyfmac43430-sdio.clm_blob ${D}/lib/firmware/brcm/brcmfmac43430-sdio.clm_blob
-    ln -sf brcmfmac43430-sdio.MUR1DX.txt        ${D}/lib/firmware/brcm/brcmfmac43430-sdio.txt
+    ln -sf brcmfmac43430-sdio.st,stm32mp157c-dk2.txt \
+                                                ${D}/lib/firmware/brcm/brcmfmac43430-sdio.txt
+
+    # Symlink board-specific per bin e clm_blob
+    ln -sf ../cypress/cyfmac43430-sdio.bin      ${D}/lib/firmware/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.bin
+    ln -sf ../cypress/cyfmac43430-sdio.clm_blob ${D}/lib/firmware/brcm/brcmfmac43430-sdio.st,stm32mp157c-dk2.clm_blob
 }
 
 COMPATIBLE_MACHINE = "^(stm32mp15x|stm32mp157f-dk2)$"

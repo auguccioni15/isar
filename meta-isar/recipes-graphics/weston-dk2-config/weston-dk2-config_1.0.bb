@@ -8,7 +8,7 @@ MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
 inherit dpkg-raw
 
-DEBIAN_DEPENDS = "weston, weston-terminal"
+DEBIAN_DEPENDS = "weston"
 
 SRC_URI = "file://weston.service \
            file://wvkbd.service \
@@ -27,4 +27,10 @@ do_install() {
         ${D}/lib/systemd/system/multi-user.target.wants/wvkbd.service
     install -d ${D}/etc/xdg/weston
     install -m 0644 ${WORKDIR}/weston.ini ${D}/etc/xdg/weston/weston.ini
+
+    # desktop-shell.so cerca weston-desktop-shell in LIBEXECDIR=/usr/lib/weston
+    # ma su armhf Debian lo installa nel path multiarch
+    install -d ${D}/usr/lib/weston
+    ln -sf /usr/lib/arm-linux-gnueabihf/weston-desktop-shell \
+        ${D}/usr/lib/weston/weston-desktop-shell
 }

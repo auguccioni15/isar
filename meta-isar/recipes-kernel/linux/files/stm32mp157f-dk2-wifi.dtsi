@@ -27,6 +27,7 @@
 	mmc-pwrseq = <&wifi_pwrseq>;
 	cap-sdio-irq;
 	max-frequency = <25000000>;
+	no-1-8-v;
 	#address-cells = <1>;
 	#size-cells = <0>;
 	status = "okay";
