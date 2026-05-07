@@ -22,6 +22,12 @@ LINUX_VERSION_EXTENSION = "-stm32mp"
 KERNEL_CONFIG_FRAGMENTS:stm32mp15x = "stm32mp15x.cfg"
 
 do_prepare_build:append:stm32mp15x() {
+    # dwc3-stm32.c uses FIELD_PREP but misses the bitfield.h include
+    DWC3="${S}/drivers/usb/dwc3/dwc3-stm32.c"
+    if [ -f "${DWC3}" ] && ! grep -q "bitfield.h" "${DWC3}"; then
+        sed -i 's|#include <linux/clk.h>|#include <linux/bitfield.h>\n#include <linux/clk.h>|' "${DWC3}"
+    fi
+
     # v6.1 keeps STM32 DTS directly under arch/arm/boot/dts/
     DTS_DIR="${S}/arch/arm/boot/dts/st"
     [ -d "${DTS_DIR}" ] || DTS_DIR="${S}/arch/arm/boot/dts"
