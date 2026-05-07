@@ -146,14 +146,21 @@ Test code style: PEP8/flake8; format with `black -S -l 79 <file>`. Use single qu
 
 ## STM32MP157F-DK2 target
 
-The `stm32mp157f-dk2` machine (`meta-isar/conf/machine/stm32mp157f-dk2.conf`) is the primary development target in this repo. Key points:
+The `stm32mp157f-dk2` machine (`meta-isar/conf/machine/stm32mp157f-dk2.conf`) is the primary development target in this repo.
+
+**Build command:**
+```sh
+kas-container --isar build kas/kas-stm32mp1-f-dk2.yaml
+```
+
+Key points:
 
 - Extends `stm32mp15x.conf`; uses `stm32mp157c-dk2.dtb` (variant F has no dedicated DTB in TF-A 2.4).
 - Boot chain: TF-A (`AARCH32_SP=optee`) → OP-TEE → U-Boot → kernel; WKS file `stm32mp15x-dk2.wks.in` creates a FAT32 bootfs + ext4 rootfs layout.
-- WiFi (CYW43438 via SDMMC2/SDIO) requires `CONFIG_MMC=y` and `CONFIG_MMC_PWRSEQ_SIMPLE=y` built-in (not modules); see `meta-isar/recipes-kernel/linux/files/stm32mp15x.cfg`.
+- WiFi (CYW43438 via SDMMC2/SDIO): `CONFIG_BRCMFMAC=y` (built-in, not module) is required — as a module the driver loads too late and the chip's PLL fails to lock (HT Avail timeout). See `meta-isar/recipes-kernel/linux/files/stm32mp15x.cfg`.
 - Custom firmware package `linux-firmware` (`meta-isar/recipes-kernel/linux-firmware/linux-firmware_git.bb`) fetches from kernel.org and installs only the `cypress/cyfmac43430-sdio.*` files + NVRAM symlinks.
 - Weston is configured via the `weston-dk2-config` dpkg-raw package (`meta-isar/recipes-graphics/weston-dk2-config/`), which installs a systemd service and `weston.ini`.
-- No multiconfig entry exists yet for `stm32mp157f-dk2`; the existing `stm32mp15x-bullseye.conf` uses the parent machine. Add `meta-isar/conf/multiconfig/stm32mp157f-dk2-bookworm.conf` to target Bookworm on this board.
+- The multiconfig `meta-isar/conf/multiconfig/stm32mp157f-dk2-bookworm.conf` maps the kas machine/distro selection to the BitBake `mc:stm32mp157f-dk2-bookworm:*` target.
 
 ## Contributing
 
