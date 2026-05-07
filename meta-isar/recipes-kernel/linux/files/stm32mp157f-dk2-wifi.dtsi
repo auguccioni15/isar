@@ -11,7 +11,7 @@
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&gpioh 4 GPIO_ACTIVE_LOW>;
-		post-power-on-delay-ms = <100>;
+		post-power-on-delay-ms = <200>;
 	};
 };
 
@@ -25,6 +25,8 @@
 	bus-width = <4>;
 	vmmc-supply = <&v3v3>;
 	mmc-pwrseq = <&wifi_pwrseq>;
+	cap-sdio-irq;
+	max-frequency = <25000000>;
 	#address-cells = <1>;
 	#size-cells = <0>;
 	status = "okay";
