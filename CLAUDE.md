@@ -62,9 +62,23 @@ scripts/start_vm -a amd64 -d bookworm
 4. Populates the target rootfs from an apt repository of those packages
 5. Generates bootable images via `wic` or other image types
 
-**Package recipes**: Custom packages inherit `dpkg.bbclass` (or `dpkg-raw`, `dpkg-gbp`, `dpkg-prebuilt`, etc. from `meta/classes-recipe/`). Packages are built by `sbuild` inside the schroot and deposited into a local apt repo before being installed into the rootfs.
+**Package recipes**: Custom packages are built by `sbuild` inside the schroot and deposited into a local apt repo before being installed into the rootfs. Choose the class based on the source:
+
+| Class | Use when |
+|---|---|
+| `dpkg` | Upstream source tarball + `debian/` directory in `SRC_URI` |
+| `dpkg-raw` | Pure file installation with no upstream source (config files, systemd units, symlinks) |
+| `dpkg-gbp` | Debian Git-packaging workflow (`git-buildpackage`) |
+| `dpkg-prebuilt` | Pre-built `.deb` to repack or install directly |
+| `dpkg-source` | Low-level base; rarely inherited directly |
+
+**IMAGE_INSTALL vs IMAGE_PREINSTALL**: `IMAGE_INSTALL` lists custom packages built by Isar recipes (installed from the local apt repo). `IMAGE_PREINSTALL` lists packages installed directly from the upstream Debian mirror without building. Use `IMAGE_PREINSTALL` for standard Debian packages (e.g. `weston`, `bluez`, `iproute2`).
 
 **Image types**: Controlled by `IMAGE_FSTYPES`; `wic` images use `.wks.in` files under `meta-isar/scripts/lib/wic/canned-wks/` and `meta/scripts/lib/wic/`.
+
+**Kernel config fragments**: Add `.cfg` files (one `CONFIG_FOO=y` per line) to `SRC_URI` in the kernel recipe. The `linux-kernel.bbclass` merges them via `merge_config.sh` on top of the board defconfig.
+
+**Machine config overrides**: BitBake override syntax (`:machinename`) is used throughout. `MACHINEOVERRIDES =. "foo:"` prepends a new override so that `:foo` conditionals apply to all machines that `require` a base `.conf`.
 
 **Cross-compilation**: Enabled globally with `ISAR_CROSS_COMPILE = "1"`. Opt individual recipes out with `ISAR_CROSS_COMPILE = "0"`.
 
@@ -75,10 +89,30 @@ scripts/start_vm -a amd64 -d bookworm
 | `MACHINE` | Target hardware (e.g. `qemuamd64`) |
 | `DISTRO` | Debian distribution (e.g. `debian-bookworm`) |
 | `DISTRO_ARCH` | Target architecture (e.g. `amd64`, `armhf`, `arm64`) |
-| `IMAGE_INSTALL` | Space-separated list of packages to install into the image |
+| `IMAGE_INSTALL` | Custom Isar-built packages to install |
+| `IMAGE_PREINSTALL` | Standard Debian packages to install from the mirror |
 | `KERNEL_NAME` | Selects the kernel recipe (`linux-<name>`) |
 | `IMAGE_FSTYPES` | Output image formats (`ext4`, `wic`, `oci-archive`, …) |
 | `ISAR_CROSS_COMPILE` | `"1"` to enable cross-compilation |
+| `COMPATIBLE_MACHINE` | Regex in a recipe restricting which machines can build it |
+
+## BitBake Debugging
+
+```sh
+# Force a recipe to rebuild from scratch
+bitbake -f -c clean mc:qemuamd64-bookworm:my-package
+bitbake mc:qemuamd64-bookworm:my-package
+
+# Run a single task
+bitbake -c do_install mc:qemuamd64-bookworm:my-package
+
+# Show dependency graph (outputs to task-depends.dot)
+bitbake -g mc:qemuamd64-bookworm:isar-image-base
+
+# Build output artifacts land in:
+# kas/build/tmp/work/<distro>-<arch>/<recipe>/<version>/
+# WIC images: kas/build/tmp/deploy/images/<machine>/
+```
 
 ## Running Tests
 
@@ -109,6 +143,17 @@ avocado run citest.py -t full --max-parallel-tasks=1
 ```
 
 Test code style: PEP8/flake8; format with `black -S -l 79 <file>`. Use single quotes for data strings, double quotes for human-readable strings.
+
+## STM32MP157F-DK2 target
+
+The `stm32mp157f-dk2` machine (`meta-isar/conf/machine/stm32mp157f-dk2.conf`) is the primary development target in this repo. Key points:
+
+- Extends `stm32mp15x.conf`; uses `stm32mp157c-dk2.dtb` (variant F has no dedicated DTB in TF-A 2.4).
+- Boot chain: TF-A (`AARCH32_SP=optee`) → OP-TEE → U-Boot → kernel; WKS file `stm32mp15x-dk2.wks.in` creates a FAT32 bootfs + ext4 rootfs layout.
+- WiFi (CYW43438 via SDMMC2/SDIO) requires `CONFIG_MMC=y` and `CONFIG_MMC_PWRSEQ_SIMPLE=y` built-in (not modules); see `meta-isar/recipes-kernel/linux/files/stm32mp15x.cfg`.
+- Custom firmware package `linux-firmware` (`meta-isar/recipes-kernel/linux-firmware/linux-firmware_git.bb`) fetches from kernel.org and installs only the `cypress/cyfmac43430-sdio.*` files + NVRAM symlinks.
+- Weston is configured via the `weston-dk2-config` dpkg-raw package (`meta-isar/recipes-graphics/weston-dk2-config/`), which installs a systemd service and `weston.ini`.
+- No multiconfig entry exists yet for `stm32mp157f-dk2`; the existing `stm32mp15x-bullseye.conf` uses the parent machine. Add `meta-isar/conf/multiconfig/stm32mp157f-dk2-bookworm.conf` to target Bookworm on this board.
 
 ## Contributing
 
