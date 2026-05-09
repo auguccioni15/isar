@@ -1,0 +1,19 @@
+# Root filesystem partition (set by U-Boot distro_bootpart)
+ROOT_PARTITION="${distro_bootpart}"
+
+# Kernel command line arguments for STM32MP157F-DK2
+# root=PARTLABEL=rootfs: locate rootfs by GPT partition label (robust vs. device order)
+# console=ttySTM0,115200: STM32 UART4 at 0x40010000, standard DK2 console
+KERNEL_ARGS="root=PARTLABEL=rootfs rootwait rw console=ttySTM0,115200"
+
+# No device tree overlays needed
+OVERLAYS=""
+
+# Include initrd if present
+NO_INITRD=""
+
+# No U-Boot commands to prepend
+SCRIPT_PREPEND=""
+
+# Use DTB from bootfs, not U-Boot built-in
+BUILTIN_DT="no"

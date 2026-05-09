@@ -5,8 +5,11 @@
 
 inherit linux-kernel
 
-SRCREV = "${AUTOREV}"
+SRCREV = "c3e95fcd0038c21b414a80b77fb09a2063e51c9a"
 PV = "6.1+git${SRCPV}"
+
+BB_GIT_SHALLOW = "1"
+BB_GIT_SHALLOW_DEPTH = "1"
 
 SRC_URI += " \
     git://github.com/STMicroelectronics/linux.git;protocol=https;branch=v6.1-stm32mp \

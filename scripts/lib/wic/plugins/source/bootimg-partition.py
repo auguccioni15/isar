@@ -120,7 +120,7 @@ class BootimgPartitionPlugin(SourcePlugin):
 
         if not custom_cfg:
             # The kernel types supported by the sysboot of u-boot
-            kernel_types = ["zImage", "Image", "fitImage", "uImage", "vmlinux"]
+            kernel_types = ["zImage", "Image", "fitImage", "uImage", "vmlinuz", "vmlinux"]
             has_dtb = False
             fdt_dir = '/'
             kernel_name = None
