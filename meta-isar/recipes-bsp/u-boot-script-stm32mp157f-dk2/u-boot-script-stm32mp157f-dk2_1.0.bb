@@ -22,3 +22,16 @@ do_install() {
     install -d ${D}/etc/default
     install -m 0644 ${WORKDIR}/u-boot-script ${D}/etc/default/u-boot-script
 }
+
+# Regenerate boot.scr with our KERNEL_ARGS regardless of whether the kernel
+# postinst hook ran before our package was installed.
+do_prepare_build:append() {
+    cat > ${S}/debian/${PN}.postinst << 'EOF'
+#!/bin/sh
+set -e
+if [ -x /usr/sbin/update-u-boot-script ]; then
+    update-u-boot-script || true
+fi
+EOF
+    chmod 0755 ${S}/debian/${PN}.postinst
+}
