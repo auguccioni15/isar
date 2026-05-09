@@ -4,7 +4,7 @@ ROOT_PARTITION="${distro_bootpart}"
 # Kernel command line arguments for STM32MP157F-DK2
 # root=LABEL=rootfs: ext4 filesystem label set by WKS --label rootfs (not GPT PARTLABEL)
 # earlycon: output before the serial driver fully initialises
-KERNEL_ARGS="root=LABEL=rootfs rootwait rw console=ttySTM0,115200 earlycon=stm32_serial,0x40010000,115200"
+KERNEL_ARGS="root=LABEL=rootfs rootwait rw console=ttySTM0,115200 earlycon=stm32_serial,0x40010000,115200 clk_ignore_unused nomodeset"
 
 # No device tree overlays needed
 OVERLAYS=""
