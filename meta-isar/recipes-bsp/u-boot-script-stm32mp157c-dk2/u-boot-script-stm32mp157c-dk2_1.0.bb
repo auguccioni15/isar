@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-DESCRIPTION = "U-Boot boot script config for STM32MP157F-DK2"
+DESCRIPTION = "U-Boot boot script config for STM32MP157C-DK2"
 MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
 inherit dpkg-raw
@@ -16,7 +16,7 @@ DEBIAN_REPLACES = "u-boot-script"
 
 SRC_URI = "file://u-boot-script"
 
-COMPATIBLE_MACHINE = "^stm32mp157f-dk2$"
+COMPATIBLE_MACHINE = "^stm32mp157c-dk2$"
 
 do_install() {
     install -d ${D}/etc/default

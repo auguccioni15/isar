@@ -14,7 +14,7 @@ SRC_URI = "file://weston.service \
            file://wvkbd.service \
            file://weston.ini"
 
-COMPATIBLE_MACHINE = "^(stm32mp157c-dk2|stm32mp157f-dk2)$"
+COMPATIBLE_MACHINE = "^(stm32mp15x)$"
 
 do_install() {
     install -d ${D}/lib/systemd/system

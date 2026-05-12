@@ -3,6 +3,6 @@ header:
   includes:
     - isar.yaml
 
-machine: stm32mp157f-dk2
+machine: stm32mp157c-dk2
 distro: debian-bookworm
 target: isar-image-base
