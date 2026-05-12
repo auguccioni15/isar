@@ -157,9 +157,14 @@ Key points:
 
 - Extends `stm32mp15x.conf`; uses `stm32mp157c-dk2.dtb` (variant F has no dedicated DTB in TF-A 2.4).
 - Boot chain: TF-A (`AARCH32_SP=optee`) → OP-TEE → U-Boot → kernel; WKS file `stm32mp15x-dk2.wks.in` creates a FAT32 bootfs + ext4 rootfs layout.
+- OP-TEE (`meta-isar/recipes-bsp/optee-os/optee-os-stm32mp15x_3.21.0.inc`) embeds `stm32mp157c-dk2.dts` (not `ev1.dts` — the upstream default is for the evaluation board, not the DK2).
+- U-Boot carries three local patches (`meta-isar/recipes-bsp/u-boot/files/`): `0001` restores `config.mk` for non-FIP stm32image generation; `0002` drops the hard-coded `CONFIG_DEFAULT_DEVICE_TREE="stm32mp157c-ev1"` (so the build system can inject the correct DTS) and enables early debug UART on UART4 (0x40010000, 64 MHz HSI clock); `0003` disables `pwr_regulators` in U-Boot's pre-reloc DT overlay — TF-A maps PWR registers (0x50001000) to the secure world, so probing that driver during pre-reloc crashes U-Boot silently before any console output.
 - WiFi (CYW43438 via SDMMC2/SDIO): `CONFIG_BRCMFMAC=y` (built-in, not module) is required — as a module the driver loads too late and the chip's PLL fails to lock (HT Avail timeout). See `meta-isar/recipes-kernel/linux/files/stm32mp15x.cfg`.
-- Custom firmware package `linux-firmware` (`meta-isar/recipes-kernel/linux-firmware/linux-firmware_git.bb`) fetches from kernel.org and installs only the `cypress/cyfmac43430-sdio.*` files + NVRAM symlinks.
-- Weston is configured via the `weston-dk2-config` dpkg-raw package (`meta-isar/recipes-graphics/weston-dk2-config/`), which installs a systemd service and `weston.ini`.
+- The kernel recipe (`meta-isar/recipes-kernel/linux/linux-stm32mp_6.1.bb`) patches `dwc3-stm32.c` to add a missing `bitfield.h` include and injects `stm32mp157f-dk2-wifi.dtsi` into `stm32mp157c-dk2.dts` to describe the SDIO WiFi node.
+- WiFi firmware (`cyfmac43430-sdio`) and Bluetooth come from the Debian `firmware-brcm80211` package installed via `IMAGE_PREINSTALL` (non-free-firmware); no custom firmware recipe.
+- `initramfs-tee-ftpm-hook` is removed from `IMAGE_INSTALL` because `CFG_EARLY_TA` is not enabled in OP-TEE, so `/dev/tpmrm0` is absent at initramfs time and the hook would stall the rootfs mount.
+- Weston and the on-screen keyboard (`wvkbd`) are configured via the `weston-dk2-config` dpkg-raw package (`meta-isar/recipes-graphics/weston-dk2-config/`), which installs systemd services for both and `weston.ini`. It also provides the multiarch symlink for `weston-desktop-shell` (needed on armhf).
+- `u-boot-script-stm32mp157f-dk2` (`meta-isar/recipes-bsp/u-boot-script-stm32mp157f-dk2/`) overrides the default `/etc/default/u-boot-script` config file using `DEBIAN_REPLACES = "u-boot-script"` and runs `update-u-boot-script` in its `postinst` to regenerate `boot.scr`.
 - The multiconfig `meta-isar/conf/multiconfig/stm32mp157f-dk2-bookworm.conf` maps the kas machine/distro selection to the BitBake `mc:stm32mp157f-dk2-bookworm:*` target.
 
 ## Contributing

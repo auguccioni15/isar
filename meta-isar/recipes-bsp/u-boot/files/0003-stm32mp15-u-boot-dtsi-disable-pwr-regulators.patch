@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrea <auguccioni15@gmail.com>
+Date: Sat, 10 May 2026 00:00:00 +0000
+Subject: [PATCH] arm: dts: stm32mp15-u-boot: disable pwr_regulators in
+ pre-reloc phase
+
+The non-SCMI u-boot overlay marks &pwr_regulators as bootph-all, which
+causes DM to probe the STM32MP1 PWR regulator driver during pre-reloc
+init.  That driver accesses PWR registers at 0x50001000, which are mapped
+to the secure world by TF-A and are not accessible from non-secure U-Boot.
+The resulting fault crashes U-Boot silently before any console output.
+
+The SCMI variant avoids this because clock/regulator management is
+delegated to OP-TEE; the non-SCMI build handles clocks via RCC (which
+TF-A leaves non-secure) and does not need PWR regulators at boot time.
+
+Disable the node so DM skips it during pre-reloc probe.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ arch/arm/dts/stm32mp15-u-boot.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/dts/stm32mp15-u-boot.dtsi b/arch/arm/dts/stm32mp15-u-boot.dtsi
+index 0000000..0000001 100644
+--- a/arch/arm/dts/stm32mp15-u-boot.dtsi
++++ b/arch/arm/dts/stm32mp15-u-boot.dtsi
+@@ -167,6 +167,6 @@
+ &pwr_regulators {
+-	bootph-all;
++	status = "disabled";
+ };

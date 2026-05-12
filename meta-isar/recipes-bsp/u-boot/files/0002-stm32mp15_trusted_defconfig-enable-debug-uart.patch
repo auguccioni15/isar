@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrea <auguccioni15@gmail.com>
+Date: Sat, 10 May 2026 00:00:00 +0000
+Subject: [PATCH] configs: stm32mp15_trusted_defconfig: drop static DTS
+ default and enable debug UART
+
+Remove the hard-coded CONFIG_DEFAULT_DEVICE_TREE so the build system can
+inject the correct board DTS at build time.  Also enable early debug UART
+on UART4 (0x40010000, 64 MHz HSI clock) so U-Boot emits diagnostic output
+before the DM init sequence.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ configs/stm32mp15_trusted_defconfig | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/configs/stm32mp15_trusted_defconfig b/configs/stm32mp15_trusted_defconfig
+index 0000000..0000001 100644
+--- a/configs/stm32mp15_trusted_defconfig
++++ b/configs/stm32mp15_trusted_defconfig
+@@ -6,4 +6,3 @@ CONFIG_CUSTOM_SYS_INIT_SP_ADDR=0xc0100000
+ CONFIG_ENV_OFFSET=0x280000
+ CONFIG_ENV_SECT_SIZE=0x40000
+-CONFIG_DEFAULT_DEVICE_TREE="stm32mp157c-ev1"
+ CONFIG_DDR_CACHEABLE_SIZE=0x10000000
+@@ -167,3 +166,7 @@ CONFIG_ERRNO_STR=y
+ # CONFIG_LMB_USE_MAX_REGIONS is not set
+ CONFIG_LMB_MEMORY_REGIONS=2
+ CONFIG_LMB_RESERVED_REGIONS=16
++CONFIG_DEBUG_UART=y
++CONFIG_DEBUG_UART_STM32=y
++CONFIG_DEBUG_UART_BASE=0x40010000
++CONFIG_DEBUG_UART_CLOCK=64000000
