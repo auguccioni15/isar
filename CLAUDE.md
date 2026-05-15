@@ -49,11 +49,19 @@ scripts/start_vm -a amd64 -d bookworm
 
 - **`meta/`** — Core Isar framework: BitBake classes (`classes-recipe/`), core recipes (bootstrap, schroot, apt repos, images), and distro configs.
 - **`meta-isar/`** — BSP/demo layer: machine configs (`conf/machine/`), multiconfig entries (`conf/multiconfig/`), and BSP recipes (U-Boot, TF-A, OP-TEE, kernels).
+- **`meta-test/`** — Test-only layer with recipes used by the Avocado CI suite (`testsuite/citest.py`).
 - **`kas/`** — Kconfig-based configuration fragments consumed by the `kas` tool: `machine/`, `distro/`, `image/`, `opt/`, `package/`.
 
 ### Key concepts
 
 **Multiconfig builds**: Each target is identified as `mc:<machine>-<distro>`. Machine and distro names come from `meta-isar/conf/multiconfig/<machine>-<distro>.conf`. This lets a single `bitbake` invocation build for many machine/distro pairs simultaneously.
+
+Adding a new machine requires two steps: (1) create `meta-isar/conf/multiconfig/<machine>-<distro>.conf`, and (2) register it in `BBMULTICONFIG`. For full CI builds, append it to `meta-isar/conf/mc.conf`. For a single-machine kas build, set it via `local_conf_header` in the kas YAML:
+```yaml
+local_conf_header:
+  my_multiconfig: |
+    BBMULTICONFIG = "mymachine-bookworm"
+```
 
 **Build pipeline**: For each target, Isar:
 1. Bootstraps a minimal Debian base system via `mmdebstrap` (`meta/recipes-core/isar-mmdebstrap/`)
@@ -105,6 +113,9 @@ bitbake mc:qemuamd64-bookworm:my-package
 
 # Run a single task
 bitbake -c do_install mc:qemuamd64-bookworm:my-package
+
+# Inspect the final value of a variable for a recipe
+bitbake -e mc:qemuamd64-bookworm:my-package | grep '^VARIABLE='
 
 # Show dependency graph (outputs to task-depends.dot)
 bitbake -g mc:qemuamd64-bookworm:isar-image-base
@@ -169,6 +180,14 @@ Key points:
 
 ## Contributing
 
-Patches go to the `isar-users@googlegroups.com` mailing list — GitHub PRs are not used for review. Base patches on the `next` branch. Every patch needs a `Signed-off-by` line. See `CONTRIBUTING.md` for full guidelines.
+Patches go to the `isar-users@googlegroups.com` mailing list — GitHub PRs are not used for review. Base patches on the `next` branch. Every patch needs a `Signed-off-by` line (`git commit -s`). See `CONTRIBUTING.md` for full guidelines.
+
+```sh
+# Prepare patches against next
+git format-patch -v2 --cover-letter origin/next..HEAD
+
+# Send to the mailing list
+git send-email --to=isar-users@googlegroups.com *.patch
+```
 
 `master` is the main development branch. `next` is the CI/integration branch; changes are promoted from `next` to `master` roughly every two weeks.
