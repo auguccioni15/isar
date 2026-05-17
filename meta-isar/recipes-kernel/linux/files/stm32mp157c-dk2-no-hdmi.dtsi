@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * STM32MP157C-DK2: disable SII902X HDMI bridge.
+ *
+ * The SII902X at I2C1/0x39 does not respond on this board, causing
+ * the LTDC display controller to stay in deferred probe indefinitely.
+ * DSI (OTM8009A panel via MB1166) is the only active display output.
+ *
+ * - Remove the SII902X node so the driver is never probed.
+ * - Disable the HDMI connector node.
+ * - Drop the remote-endpoint from ltdc_ep0_out so LTDC does not wait
+ *   for a bridge on its HDMI output port.
+ */
+
+&i2c1 {
+	/delete-node/ hdmi-transmitter@39;
+};
+
+&hdmi {
+	status = "disabled";
+};
+
+&ltdc_ep0_out {
+	/delete-property/ remote-endpoint;
+};

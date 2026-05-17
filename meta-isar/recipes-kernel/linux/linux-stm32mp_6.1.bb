@@ -14,7 +14,8 @@ BB_GIT_SHALLOW_DEPTH = "1"
 SRC_URI += " \
     git://github.com/STMicroelectronics/linux.git;protocol=https;branch=v6.1-stm32mp \
     file://stm32mp15x.cfg;apply=no \
-    file://stm32mp157c-dk2-wifi.dtsi"
+    file://stm32mp157c-dk2-wifi.dtsi \
+    file://stm32mp157c-dk2-no-hdmi.dtsi"
 
 S = "${WORKDIR}/git"
 
@@ -43,6 +44,15 @@ do_prepare_build:append:stm32mp15x() {
             echo '#include "stm32mp157c-dk2-wifi.dtsi"' >> \
                 "${DTS_DIR}/stm32mp157c-dk2.dts"
         fi
+    fi
+
+    # Disable SII902X HDMI bridge: it does not respond on I2C and keeps
+    # LTDC stuck in deferred probe. DSI (OTM8009A) is the only output used.
+    install -m 0644 ${WORKDIR}/stm32mp157c-dk2-no-hdmi.dtsi \
+        "${DTS_DIR}/stm32mp157c-dk2-no-hdmi.dtsi"
+    if ! grep -q "stm32mp157c-dk2-no-hdmi" "${DTS_DIR}/stm32mp157c-dk2.dts" 2>/dev/null; then
+        echo '#include "stm32mp157c-dk2-no-hdmi.dtsi"' >> \
+            "${DTS_DIR}/stm32mp157c-dk2.dts"
     fi
 }
 
