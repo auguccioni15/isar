@@ -7,6 +7,14 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
+/* Enable IWDG2 so the kernel watchdog driver manages the watchdog
+ * started by U-Boot (watchdog@5a002000, 32s timeout). */
+&iwdg2 {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
+
 / {
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";

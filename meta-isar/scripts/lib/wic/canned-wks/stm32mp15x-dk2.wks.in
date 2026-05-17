@@ -31,4 +31,4 @@ part /boot --part-name bootfs --source bootimg-partition --sourceparams "loader=
 # Root filesystem
 part / --source rootfs-u-boot --fstype ext4 --mkfs-extraopts "-T default" --label rootfs --align 1024 --active --use-uuid
 
-bootloader --ptable gpt --append="rootwait rw console=ttySTM0,115200 earlycon=stm32_serial,0x40010000,115200"
+bootloader --ptable gpt --append="rootwait rw console=ttySTM0,115200 earlycon clk_ignore_unused nomodeset panic=60"

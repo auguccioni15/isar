@@ -2,17 +2,22 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Andrea <auguccioni15@gmail.com>
 Date: Sat, 10 May 2026 00:00:00 +0000
 Subject: [PATCH] configs: stm32mp15_trusted_defconfig: drop static DTS
- default and enable debug UART
+ default, enable debug UART, disable watchdog autostart
 
 Remove the hard-coded CONFIG_DEFAULT_DEVICE_TREE so the build system can
 inject the correct board DTS at build time.  Also enable early debug UART
 on UART4 (0x40010000, 64 MHz HSI clock) so U-Boot emits diagnostic output
 before the DM init sequence.
 
+Disable WATCHDOG_AUTOSTART so U-Boot does not start IWDG2 before handing
+off to Linux.  With autostart enabled the hardware caps the timeout at
+~32 s; if Linux takes longer than that to probe the IWDG2 node the board
+silently resets.  Linux manages the watchdog once it is running.
+
 Signed-off-by: Andrea <auguccioni15@gmail.com>
 ---
- configs/stm32mp15_trusted_defconfig | 5 ++++-
- 1 file changed, 4 insertions(+), 1 deletion(-)
+ configs/stm32mp15_trusted_defconfig | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/configs/stm32mp15_trusted_defconfig b/configs/stm32mp15_trusted_defconfig
 index 0000000..0000001 100644
@@ -23,7 +28,7 @@ index 0000000..0000001 100644
  CONFIG_ENV_SECT_SIZE=0x40000
 -CONFIG_DEFAULT_DEVICE_TREE="stm32mp157c-ev1"
  CONFIG_DDR_CACHEABLE_SIZE=0x10000000
-@@ -167,3 +166,7 @@ CONFIG_ERRNO_STR=y
+@@ -167,3 +166,8 @@ CONFIG_ERRNO_STR=y
  # CONFIG_LMB_USE_MAX_REGIONS is not set
  CONFIG_LMB_MEMORY_REGIONS=2
  CONFIG_LMB_RESERVED_REGIONS=16
@@ -31,3 +36,4 @@ index 0000000..0000001 100644
 +CONFIG_DEBUG_UART_STM32=y
 +CONFIG_DEBUG_UART_BASE=0x40010000
 +CONFIG_DEBUG_UART_CLOCK=64000000
++# CONFIG_WATCHDOG_AUTOSTART is not set
