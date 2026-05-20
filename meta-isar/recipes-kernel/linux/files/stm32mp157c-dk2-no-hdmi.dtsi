@@ -10,6 +10,9 @@
  * - Disable the HDMI connector node.
  * - Drop the remote-endpoint from ltdc_ep0_out so LTDC does not wait
  *   for a bridge on its HDMI output port.
+ * - Drop dangling remote-endpoints from the HDMI connector input and
+ *   the I2S2 audio endpoint; both pointed to SII902X labels that no
+ *   longer exist after the node deletion above.
  */
 
 &i2c1 {
@@ -21,5 +24,13 @@
 };
 
 &ltdc_ep0_out {
+	/delete-property/ remote-endpoint;
+};
+
+&hdmi_connector_in {
+	/delete-property/ remote-endpoint;
+};
+
+&i2s2_endpoint {
 	/delete-property/ remote-endpoint;
 };
