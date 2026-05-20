@@ -1,0 +1,12 @@
+[Unit]
+Description=Expand root filesystem to fill SD card
+# Wait for the rootfs partition device to appear via udev before running.
+After=dev-mmcblk0p8.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/expand-rootfs.sh
+
+[Install]
+WantedBy=multi-user.target
