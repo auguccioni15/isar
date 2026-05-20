@@ -6,7 +6,7 @@ After=dev-mmcblk0p8.device
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/sbin/expand-rootfs.sh
+ExecStart=/usr/sbin/expand-rootfs.sh
 
 [Install]
 WantedBy=multi-user.target

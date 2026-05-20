@@ -16,8 +16,8 @@ SRC_URI = "file://expand-rootfs.sh \
 COMPATIBLE_MACHINE = "^(stm32mp157c-dk2)$"
 
 do_install() {
-    install -d ${D}/usr/local/sbin
-    install -m 0755 ${WORKDIR}/expand-rootfs.sh ${D}/usr/local/sbin/expand-rootfs.sh
+    install -d ${D}/usr/sbin
+    install -m 0755 ${WORKDIR}/expand-rootfs.sh ${D}/usr/sbin/expand-rootfs.sh
 
     install -d ${D}/lib/systemd/system
     install -d ${D}/lib/systemd/system/multi-user.target.wants
