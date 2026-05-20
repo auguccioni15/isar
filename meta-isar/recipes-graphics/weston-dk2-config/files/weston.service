@@ -1,7 +1,10 @@
 [Unit]
 Description=Weston Wayland Compositor
-After=systemd-udevd.service
-ConditionPathExists=/dev/dri/card0
+# Wait for the DRM device to appear via udev (handles deferred probe on LTDC).
+# ConditionPathExists is evaluated once at start-up and does not retry on
+# condition failure, so we bind to the device unit instead.
+After=dev-dri-card0.device
+Requires=dev-dri-card0.device
 
 [Service]
 Environment=XDG_RUNTIME_DIR=/run/user/0
