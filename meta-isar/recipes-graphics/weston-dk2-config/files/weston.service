@@ -1,16 +1,17 @@
 [Unit]
 Description=Weston Wayland Compositor
-# Wait for the DRM device to appear via udev (handles deferred probe on LTDC).
+# Wait for the STM LTDC display controller (card1) to appear via udev.
+# Etnaviv GPU probes first and gets card0; LTDC gets card1.
 # ConditionPathExists is evaluated once at start-up and does not retry on
 # condition failure, so we bind to the device unit instead.
-After=dev-dri-card0.device
-Requires=dev-dri-card0.device
+After=dev-dri-card1.device
+Requires=dev-dri-card1.device
 
 [Service]
 Environment=XDG_RUNTIME_DIR=/run/user/0
 ExecStartPre=/bin/mkdir -p /run/user/0
 ExecStartPre=/bin/chmod 700 /run/user/0
-ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --use-pixman
+ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device=card1
 Restart=on-failure
 StandardInput=tty
 TTYPath=/dev/tty2
