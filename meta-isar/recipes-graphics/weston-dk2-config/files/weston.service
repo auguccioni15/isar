@@ -1,16 +1,18 @@
 [Unit]
 Description=Weston Wayland Compositor
-# Wait for the STM LTDC display controller (card1) to appear via udev.
-# Etnaviv GPU probes first and gets card0; LTDC gets card1.
-# ConditionPathExists is evaluated once at start-up and does not retry on
-# condition failure, so we bind to the device unit instead.
-After=dev-dri-card1.device
-Requires=dev-dri-card1.device
+# card1 is the STM LTDC display controller (Etnaviv GPU gets card0).
+# The systemd device unit for card1 can time out before LTDC completes
+# its deferred probe, so we poll for the device file directly instead
+# of using Requires=dev-dri-card1.device.
+After=local-fs.target
 
 [Service]
 Environment=XDG_RUNTIME_DIR=/run/user/0
 ExecStartPre=/bin/mkdir -p /run/user/0
 ExecStartPre=/bin/chmod 700 /run/user/0
+ExecStartPre=/bin/sh -c 'until [ -e /dev/dri/card1 ]; do sleep 1; done'
+ExecStartPre=/bin/sleep 2
+ExecStartPre=/bin/sh -c 'echo 2 > /sys/class/tty/tty0/active'
 ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device=card1 --use-pixman
 Restart=on-failure
 StandardInput=tty
