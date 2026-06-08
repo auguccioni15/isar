@@ -90,7 +90,9 @@ local_conf_header:
 
 **Cross-compilation**: Enabled globally with `ISAR_CROSS_COMPILE = "1"`. Opt individual recipes out with `ISAR_CROSS_COMPILE = "0"`.
 
-### Important variables (in `conf/local.conf` or multiconfig files)
+### Important variables
+
+In a kas build there is **no hand-edited `conf/local.conf`** — only `meta-isar/conf/local.conf.sample` exists, and the build directory's `local.conf` is generated. Set these variables in the multiconfig `.conf` file, a machine/distro `.conf`, or a kas fragment's `local_conf_header` instead.
 
 | Variable | Purpose |
 |---|---|
@@ -164,6 +166,10 @@ The `stm32mp157c-dk2` machine (`meta-isar/conf/machine/stm32mp157c-dk2.conf`) is
 kas-container --isar build kas/kas-stm32mp1-c-dk2.yaml
 ```
 
+Use `kas/kas-stm32mp1-c-dk2.yaml` — it sets `BBMULTICONFIG = "stm32mp157c-dk2-bookworm"` via `local_conf_header`. The older `kas/kas-stm32mp1-dk2.yml` is missing that line and will not select the multiconfig; prefer the `-c-dk2.yaml` file.
+
+The build produces a `.wic` image (`IMAGE_FSTYPES = "wic"`) plus a `.wic.bmap` under `kas/build/tmp/deploy/images/stm32mp157c-dk2/`. Flash it to the SD card with `bmaptool copy <image>.wic /dev/<sd>` (bmaptool auto-discovers the adjacent `.wic.bmap`; falls back to `dd` if bmaptool is unavailable). The rootfs auto-expands to fill the card on first boot (see `expand-rootfs` below).
+
 Key points:
 
 - Extends `stm32mp15x.conf`; uses `stm32mp157c-dk2.dtb` for both kernel and TF-A.
@@ -183,7 +189,7 @@ Key points:
 
 ## Contributing
 
-Patches go to the `isar-users@googlegroups.com` mailing list — GitHub PRs are not used for review. Base patches on the `next` branch. Every patch needs a `Signed-off-by` line (`git commit -s`). See `CONTRIBUTING.md` for full guidelines.
+Patches go to the `isar-users@googlegroups.com` mailing list — GitHub PRs are not used for review. The default branch is `master`, but base patches on the `next` branch (`git checkout -b my-work origin/next`). Every patch needs a `Signed-off-by` line (`git commit -s`). See `CONTRIBUTING.md` for full guidelines.
 
 ```sh
 # Prepare patches against next
