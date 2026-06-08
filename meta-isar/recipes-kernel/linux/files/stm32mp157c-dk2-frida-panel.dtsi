@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * STM32MP157C-DK2: replace the reference MB1166 OTM8009A panel with the
+ * FRIDA FRD397B25009 (Novatek NT35510) panel actually fitted to this board.
+ *
+ * The stock stm32mp157c-dk2.dts hardcodes an "orisetech,otm8009a" DSI panel
+ * (the MB1166 reference display). Our display is a FRIDA NT35510, which needs
+ * a different init sequence and runs in DSI video-burst mode. Sending the
+ * OTM8009A init to it leaves the panel dark even though DRM/Weston come up.
+ *
+ * The only FRIDA NT35510 variant supported by the panel-novatek-nt35510
+ * driver is "frida,frd400b25025"; the FRD397B25009 is electrically the same
+ * NT35510 controller, so we reuse that compatible as the starting point.
+ *
+ * - Delete the OTM8009A panel node.
+ * - Add the NT35510 panel (vdd/vddi supplies + reset gpio).
+ * - Re-point the DSI output endpoint to the new panel.
+ * - Drop the dangling 'panel' phandle from the ft6236 touch node, which
+ *   referenced the now-deleted OTM8009A.
+ */
+
+&dsi {
+	/delete-node/ panel-otm8009a@0;
+
+	panel_frida: panel@0 {
+		compatible = "frida,frd400b25025";
+		reg = <0>;
+		vdd-supply = <&v3v3>;
+		vddi-supply = <&v3v3>;
+		reset-gpios = <&gpioe 4 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		port {
+			frida_panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&dsi_out {
+	remote-endpoint = <&frida_panel_in>;
+};
+
+&i2c1 {
+	touchscreen@38 {
+		/delete-property/ panel;
+	};
+};
