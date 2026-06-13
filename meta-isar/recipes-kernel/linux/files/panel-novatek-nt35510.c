@@ -616,7 +616,7 @@ static int nt35510_send_long(struct nt35510 *nt, struct mipi_dsi_device *dsi,
 	return 0;
 }
 
-static int nt35510_read_id(struct nt35510 *nt)
+static int __maybe_unused nt35510_read_id(struct nt35510 *nt)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(nt->dev);
 	u8 id1, id2, id3;
@@ -895,7 +895,16 @@ static int nt35510_power_on(struct nt35510 *nt)
 	if (ret)
 		return ret;
 
-	nt35510_read_id(nt);
+	/*
+	 * Skip the MTP ID read on this board: the STM32 dw-mipi-dsi host
+	 * cannot reliably do a DSI read during init, so mipi_dsi_dcs_read()
+	 * times out, leaves the command FIFO wedged and makes the very next
+	 * write fail ("failed to write command FIFO"), aborting power-on. The
+	 * ID is informational only (just dev_info-logged, never used), and the
+	 * reference OTM8009A panel on this board reads no ID at all, so simply
+	 * not issuing the read lets init proceed.
+	 */
+	/* nt35510_read_id(nt); */
 
 	/* Set up stuff in  manufacturer control, page 1 */
 	ret = nt35510_send_long(nt, dsi, MCS_CMD_MAUCCTR,
@@ -1168,7 +1177,9 @@ static int nt35510_probe(struct mipi_dsi_device *dsi)
 			bl->props.brightness = nt->conf->wrdisbv;
 		else
 			bl->props.brightness = 255;
-		bl->props.power = BACKLIGHT_POWER_OFF;
+		/* BACKLIGHT_POWER_OFF only exists since v6.11; on 6.1 the
+		 * equivalent power-down state is FB_BLANK_POWERDOWN. */
+		bl->props.power = FB_BLANK_POWERDOWN;
 		nt->panel.backlight = bl;
 	}
 
