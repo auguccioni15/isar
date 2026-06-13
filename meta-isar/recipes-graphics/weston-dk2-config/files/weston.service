@@ -13,7 +13,7 @@ ExecStartPre=/bin/chmod 700 /run/user/0
 ExecStartPre=/bin/sh -c 'until [ -e /dev/dri/card1 ]; do sleep 1; done'
 ExecStartPre=/bin/sleep 2
 ExecStartPre=/bin/sh -c 'echo 2 > /sys/class/tty/tty0/active'
-ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device=card1 --use-pixman
+ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device=card1
 Restart=on-failure
 StandardInput=tty
 TTYPath=/dev/tty2
