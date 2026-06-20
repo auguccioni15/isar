@@ -1,19 +1,19 @@
 [Unit]
 Description=Weston Wayland Compositor
-# card1 is the STM LTDC display controller (Etnaviv GPU gets card0).
-# The systemd device unit for card1 can time out before LTDC completes
-# its deferred probe, so we poll for the device file directly instead
-# of using Requires=dev-dri-card1.device.
+# The LTDC display controller and the Etnaviv GPU each claim a /dev/dri/cardN,
+# and the numbering is NOT stable (it depends on probe / module-load order).
+# Resolve the LTDC card from its stable by-path symlink instead of hardcoding
+# a number, and poll for it directly: the systemd device unit can time out
+# before LTDC finishes its (deferred) probe.
 After=local-fs.target
 
 [Service]
 Environment=XDG_RUNTIME_DIR=/run/user/0
 ExecStartPre=/bin/mkdir -p /run/user/0
 ExecStartPre=/bin/chmod 700 /run/user/0
-ExecStartPre=/bin/sh -c 'until [ -e /dev/dri/card1 ]; do sleep 1; done'
+ExecStartPre=/bin/sh -c 'until [ -e /dev/dri/by-path/platform-5a001000.display-controller-card ]; do sleep 1; done'
 ExecStartPre=/bin/sleep 2
-ExecStartPre=/bin/sh -c 'echo 2 > /sys/class/tty/tty0/active'
-ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device=card1
+ExecStart=/bin/sh -c 'exec /usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device="$(basename "$(readlink -f /dev/dri/by-path/platform-5a001000.display-controller-card)")" --use-pixman'
 Restart=on-failure
 StandardInput=tty
 TTYPath=/dev/tty2

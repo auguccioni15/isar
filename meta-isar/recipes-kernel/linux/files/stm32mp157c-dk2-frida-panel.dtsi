@@ -25,8 +25,16 @@
 	panel_frida: panel@0 {
 		compatible = "frida,frd400b25025";
 		reg = <0>;
+		/*
+		 * Only vdd is wired to a named rail (v3v3). vddi is left to the
+		 * driver's dummy regulator: pointing both vdd- and vddi-supply
+		 * at the same v3v3 makes nt35510's regulator_bulk_enable/disable
+		 * act twice on one always-on rail, which triggers
+		 * "unbalanced disables for v3v3" and can power-glitch the panel
+		 * mid-init (black screen). The FRIDA module derives VDDI on-board,
+		 * just like the reference OTM8009A which used a single supply.
+		 */
 		vdd-supply = <&v3v3>;
-		vddi-supply = <&v3v3>;
 		reset-gpios = <&gpioe 4 GPIO_ACTIVE_LOW>;
 		status = "okay";
 
