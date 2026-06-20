@@ -14,7 +14,7 @@ import sqlite3
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib  # noqa: E402
+from gi.repository import Gtk, Gdk, GLib, Pango  # noqa: E402
 
 DB_DIR = '/var/lib/dk2-inventory'
 DB_PATH = os.path.join(DB_DIR, 'inventory.db')
@@ -68,7 +68,7 @@ class Database:
 
 
 CSS = b"""
-.mode-toggle { padding: 16px 28px; font-size: 18px; font-weight: bold; }
+.mode-toggle { padding: 12px 8px; font-size: 17px; font-weight: bold; }
 """
 
 
@@ -87,33 +87,45 @@ class Inventory(Gtk.Window):
         root.set_margin_end(16)
         self.add(root)
 
-        # --- top bar: CARICO/SCARICO toggle + scan field ---
-        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        root.pack_start(top, False, False, 0)
+        # The DK2 panel is 480x800 (narrow portrait), so lay the controls out
+        # vertically: a single horizontal toolbar would force a window minimum
+        # width well over 480 and weston rejects an oversized fullscreen
+        # surface with a protocol error.
+
+        # --- row 1: CARICO/SCARICO toggle ---
+        modes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                        homogeneous=True)
+        root.pack_start(modes, False, False, 0)
 
         self.btn_carico = Gtk.RadioButton.new_with_label_from_widget(
-            None, 'CARICO  (+1)')
+            None, 'CARICO +1')
         self.btn_scarico = Gtk.RadioButton.new_with_label_from_widget(
-            self.btn_carico, 'SCARICO  (-1)')
+            self.btn_carico, 'SCARICO -1')
         for b in (self.btn_carico, self.btn_scarico):
             b.set_mode(False)  # render as toggle buttons, not radio dots
             b.get_style_context().add_class('mode-toggle')
         self.btn_carico.set_active(True)
-        top.pack_start(self.btn_carico, False, False, 0)
-        top.pack_start(self.btn_scarico, False, False, 0)
+        modes.pack_start(self.btn_carico, True, True, 0)
+        modes.pack_start(self.btn_scarico, True, True, 0)
 
-        top.pack_start(Gtk.Label(label='Codice:'), False, False, 8)
+        # --- row 2: code entry + add button ---
+        codebar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        root.pack_start(codebar, False, False, 0)
+
         self.entry = Gtk.Entry()
-        self.entry.set_placeholder_text('Inquadra il codice con lo scanner…')
+        self.entry.set_width_chars(6)
+        self.entry.set_placeholder_text('Codice…')
         self.entry.connect('activate', self.on_scan)
-        top.pack_start(self.entry, True, True, 0)
+        codebar.pack_start(self.entry, True, True, 0)
 
         add_btn = Gtk.Button(label='+ Prodotto')
         add_btn.connect('clicked', lambda b: self.add_dialog(''))
-        top.pack_start(add_btn, False, False, 0)
+        codebar.pack_start(add_btn, False, False, 0)
 
-        # --- feedback line ---
+        # --- feedback line --- (ellipsize so a long product name can't
+        # widen the window past the 480 px panel)
         self.feedback = Gtk.Label(xalign=0)
+        self.feedback.set_ellipsize(Pango.EllipsizeMode.END)
         root.pack_start(self.feedback, False, False, 0)
 
         # --- product list ---
@@ -127,7 +139,9 @@ class Inventory(Gtk.Window):
             col.set_expand(i == 1)
             self.tree.append_column(col)
         scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        # AUTOMATIC on both axes: the list scrolls instead of forcing the
+        # window wider than the 480 px panel.
+        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroller.add(self.tree)
         root.pack_start(scroller, True, True, 0)
 
@@ -181,7 +195,9 @@ class Inventory(Gtk.Window):
         dialog.get_content_area().add(grid)
 
         e_cod = Gtk.Entry(text=codice, hexpand=True)
+        e_cod.set_width_chars(14)
         e_nome = Gtk.Entry(hexpand=True)
+        e_nome.set_width_chars(14)
         e_nome.set_activates_default(True)
         e_qta = Gtk.SpinButton.new_with_range(0, 1000000, 1)
         e_qta.set_value(1)
