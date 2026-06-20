@@ -9,8 +9,10 @@ MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 inherit dpkg-raw
 
 # python3-gi + gir1.2-gtk-3.0 for the GTK UI; adwaita-icon-theme supplies
-# the launcher tile icons; weston provides weston-terminal.
-DEBIAN_DEPENDS = "python3-gi, gir1.2-gtk-3.0, adwaita-icon-theme, weston"
+# the launcher tile icons; librsvg2-common gives gdk-pixbuf its SVG loader
+# (GTK theme assets are SVG) and shared-mime-info the MIME database GTK
+# needs to pick the loader; weston provides weston-terminal.
+DEBIAN_DEPENDS = "python3-gi, gir1.2-gtk-3.0, adwaita-icon-theme, librsvg2-common, shared-mime-info, weston"
 
 SRC_URI = "file://dk2-launcher \
            file://dk2-launcher.service \
