@@ -10,10 +10,12 @@
 # Started as a systemd service under Weston (see dk2-launcher.service).
 
 import os
+import shlex
+import subprocess
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gio, Gdk, GLib  # noqa: E402
+from gi.repository import Gtk, Gio, Gdk  # noqa: E402
 
 APPS_DIR = '/etc/dk2-launcher/apps'
 ICON_SIZE = 96
@@ -109,11 +111,22 @@ class Launcher(Gtk.Window):
         return button
 
     def on_click(self, button, info):
+        # Launch the Exec line directly via subprocess rather than
+        # Gio.DesktopAppInfo.launch(): under a bare systemd service (no D-Bus
+        # session bus) GIO tries to start the app in a systemd scope and
+        # fails silently, so nothing happens on tap. subprocess inherits our
+        # environment (WAYLAND_DISPLAY/XDG_RUNTIME_DIR/GDK_BACKEND set by the
+        # unit), which is all a Wayland client needs.
+        cmdline = info.get_commandline() or ''
+        argv = [a for a in shlex.split(cmdline)
+                if not (len(a) == 2 and a[0] == '%')]  # drop %U %f %i ...
+        if not argv:
+            return
         try:
-            info.launch(None, None)
-        except GLib.Error as exc:
-            print('dk2-launcher: failed to launch %s: %s'
-                  % (info.get_id(), exc))
+            subprocess.Popen(argv, env=os.environ.copy())
+        except OSError as exc:
+            print('dk2-launcher: failed to launch %s: %s' % (argv, exc),
+                  flush=True)
 
     def on_key(self, widget, event):
         if event.keyval in (Gdk.KEY_Escape, Gdk.KEY_F5):
