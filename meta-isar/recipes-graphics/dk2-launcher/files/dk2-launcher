@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# dk2-launcher — fullscreen GTK3 application launcher with large icons.
+#
+# Shows a grid of big icon tiles, one per .desktop file found in
+# /etc/dk2-launcher/apps/. Clicking a tile launches that application.
+# Add or remove .desktop files in that directory to change the grid;
+# no need to edit this script. Press Escape/F5 to reload (systemd
+# restarts a fresh instance, picking up new .desktop files).
+#
+# Started as a systemd service under Weston (see dk2-launcher.service).
+
+import os
+import gi
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gio, Gdk, GLib  # noqa: E402
+
+APPS_DIR = '/etc/dk2-launcher/apps'
+ICON_SIZE = 96
+COLUMNS = 3
+
+CSS = b"""
+.dk2-bg { background-color: #1c1f26; }
+.dk2-tile {
+    background-image: none;
+    background-color: #2a2f3a;
+    border: none;
+    border-radius: 16px;
+    padding: 20px;
+}
+.dk2-tile:hover { background-color: #3a4252; }
+.dk2-label { color: #e6e6e6; font-size: 16px; }
+"""
+
+
+def load_apps():
+    apps = []
+    try:
+        names = sorted(os.listdir(APPS_DIR))
+    except OSError:
+        names = []
+    for name in names:
+        if not name.endswith('.desktop'):
+            continue
+        info = Gio.DesktopAppInfo.new_from_filename(
+            os.path.join(APPS_DIR, name))
+        if info is not None:
+            apps.append(info)
+    return apps
+
+
+class Launcher(Gtk.Window):
+    def __init__(self):
+        super().__init__(title='DK2 Launcher')
+        self.connect('destroy', Gtk.main_quit)
+        self.connect('key-press-event', self.on_key)
+        self.fullscreen()
+        self.get_style_context().add_class('dk2-bg')
+
+        flow = Gtk.FlowBox()
+        flow.set_valign(Gtk.Align.START)
+        flow.set_halign(Gtk.Align.CENTER)
+        flow.set_max_children_per_line(COLUMNS)
+        flow.set_min_children_per_line(1)
+        flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        flow.set_homogeneous(True)
+        flow.set_row_spacing(28)
+        flow.set_column_spacing(28)
+        flow.set_margin_top(40)
+        flow.set_margin_bottom(40)
+        flow.set_margin_start(40)
+        flow.set_margin_end(40)
+
+        apps = load_apps()
+        if apps:
+            for info in apps:
+                flow.add(self.make_tile(info))
+        else:
+            flow.add(Gtk.Label(label='No applications in %s' % APPS_DIR))
+
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.get_style_context().add_class('dk2-bg')
+        scroller.add(flow)
+        self.add(scroller)
+
+    def make_tile(self, info):
+        button = Gtk.Button()
+        button.get_style_context().add_class('dk2-tile')
+        button.connect('clicked', self.on_click, info)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        image = Gtk.Image()
+        icon = info.get_icon()
+        if icon is not None:
+            image.set_from_gicon(icon, Gtk.IconSize.DIALOG)
+        else:
+            image.set_from_icon_name(
+                'application-x-executable', Gtk.IconSize.DIALOG)
+        image.set_pixel_size(ICON_SIZE)
+
+        label = Gtk.Label(label=info.get_display_name())
+        label.get_style_context().add_class('dk2-label')
+
+        box.pack_start(image, False, False, 0)
+        box.pack_start(label, False, False, 0)
+        button.add(box)
+        return button
+
+    def on_click(self, button, info):
+        try:
+            info.launch(None, None)
+        except GLib.Error as exc:
+            print('dk2-launcher: failed to launch %s: %s'
+                  % (info.get_id(), exc))
+
+    def on_key(self, widget, event):
+        if event.keyval in (Gdk.KEY_Escape, Gdk.KEY_F5):
+            Gtk.main_quit()
+        return False
+
+
+def main():
+    provider = Gtk.CssProvider()
+    provider.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(), provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    win = Launcher()
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == '__main__':
+    main()

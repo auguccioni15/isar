@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+# dk2-inventory — minimal warehouse stock tracker for the STM32MP157 DK2.
+#
+# A USB barcode scanner (IR/laser, "keyboard wedge") behaves as a keyboard:
+# it types the scanned code and presses Enter. This app keeps an always-
+# focused entry that captures those scans and, depending on the CARICO /
+# SCARICO mode, increments or decrements the product quantity in a small
+# SQLite database. Unknown codes pop up a dialog to register a new product.
+#
+# Data lives in /var/lib/dk2-inventory/inventory.db (persists across reboots).
+
+import os
+import sqlite3
+import gi
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib  # noqa: E402
+
+DB_DIR = '/var/lib/dk2-inventory'
+DB_PATH = os.path.join(DB_DIR, 'inventory.db')
+
+
+class Database:
+    def __init__(self, path=DB_PATH):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.conn = sqlite3.connect(path)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(
+            'CREATE TABLE IF NOT EXISTS prodotti ('
+            '  codice TEXT PRIMARY KEY,'
+            "  nome TEXT NOT NULL DEFAULT '',"
+            '  quantita INTEGER NOT NULL DEFAULT 0,'
+            '  aggiornato TEXT'
+            ')')
+        self.conn.commit()
+
+    def get(self, codice):
+        cur = self.conn.execute(
+            'SELECT * FROM prodotti WHERE codice = ?', (codice,))
+        return cur.fetchone()
+
+    def add(self, codice, nome, quantita):
+        self.conn.execute(
+            'INSERT INTO prodotti (codice, nome, quantita, aggiornato) '
+            "VALUES (?, ?, ?, datetime('now', 'localtime'))",
+            (codice, nome, quantita))
+        self.conn.commit()
+
+    def adjust(self, codice, delta):
+        cur = self.conn.execute(
+            'SELECT quantita FROM prodotti WHERE codice = ?', (codice,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        nuova = max(0, row['quantita'] + delta)
+        self.conn.execute(
+            'UPDATE prodotti SET quantita = ?, '
+            "aggiornato = datetime('now', 'localtime') WHERE codice = ?",
+            (nuova, codice))
+        self.conn.commit()
+        return nuova
+
+    def list_all(self):
+        cur = self.conn.execute(
+            'SELECT codice, nome, quantita FROM prodotti '
+            'ORDER BY nome, codice')
+        return cur.fetchall()
+
+
+CSS = b"""
+.mode-toggle { padding: 16px 28px; font-size: 18px; font-weight: bold; }
+"""
+
+
+class Inventory(Gtk.Window):
+    def __init__(self, db):
+        super().__init__(title='Magazzino')
+        self.db = db
+        self.connect('destroy', Gtk.main_quit)
+        self.connect('key-press-event', self.on_key)
+        self.fullscreen()
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        root.set_margin_top(16)
+        root.set_margin_bottom(16)
+        root.set_margin_start(16)
+        root.set_margin_end(16)
+        self.add(root)
+
+        # --- top bar: CARICO/SCARICO toggle + scan field ---
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        root.pack_start(top, False, False, 0)
+
+        self.btn_carico = Gtk.RadioButton.new_with_label_from_widget(
+            None, 'CARICO  (+1)')
+        self.btn_scarico = Gtk.RadioButton.new_with_label_from_widget(
+            self.btn_carico, 'SCARICO  (-1)')
+        for b in (self.btn_carico, self.btn_scarico):
+            b.set_mode(False)  # render as toggle buttons, not radio dots
+            b.get_style_context().add_class('mode-toggle')
+        self.btn_carico.set_active(True)
+        top.pack_start(self.btn_carico, False, False, 0)
+        top.pack_start(self.btn_scarico, False, False, 0)
+
+        top.pack_start(Gtk.Label(label='Codice:'), False, False, 8)
+        self.entry = Gtk.Entry()
+        self.entry.set_placeholder_text('Inquadra il codice con lo scanner…')
+        self.entry.connect('activate', self.on_scan)
+        top.pack_start(self.entry, True, True, 0)
+
+        add_btn = Gtk.Button(label='+ Prodotto')
+        add_btn.connect('clicked', lambda b: self.add_dialog(''))
+        top.pack_start(add_btn, False, False, 0)
+
+        # --- feedback line ---
+        self.feedback = Gtk.Label(xalign=0)
+        root.pack_start(self.feedback, False, False, 0)
+
+        # --- product list ---
+        self.store = Gtk.ListStore(str, str, int)
+        self.tree = Gtk.TreeView(model=self.store)
+        for i, title in enumerate(('Codice', 'Nome', 'Quantità')):
+            renderer = Gtk.CellRendererText()
+            if i == 2:
+                renderer.set_property('xalign', 1.0)
+            col = Gtk.TreeViewColumn(title, renderer, text=i)
+            col.set_expand(i == 1)
+            self.tree.append_column(col)
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.add(self.tree)
+        root.pack_start(scroller, True, True, 0)
+
+        self.refresh()
+        GLib.idle_add(self.entry.grab_focus)
+
+    @property
+    def carico(self):
+        return self.btn_carico.get_active()
+
+    def refresh(self):
+        self.store.clear()
+        for row in self.db.list_all():
+            self.store.append([row['codice'], row['nome'], row['quantita']])
+
+    def flash(self, text, ok=True):
+        color = '#2e7d32' if ok else '#c62828'
+        self.feedback.set_markup(
+            '<span size="xx-large" weight="bold" color="%s">%s</span>'
+            % (color, GLib.markup_escape_text(text)))
+
+    def on_scan(self, entry):
+        codice = entry.get_text().strip()
+        entry.set_text('')
+        if not codice:
+            return
+        prod = self.db.get(codice)
+        if prod is None:
+            self.add_dialog(codice)
+        else:
+            delta = 1 if self.carico else -1
+            nuova = self.db.adjust(codice, delta)
+            verbo = 'Carico' if delta > 0 else 'Scarico'
+            self.flash('%s  •  %s  →  %d pz'
+                       % (verbo, prod['nome'] or codice, nuova))
+            self.refresh()
+        GLib.idle_add(entry.grab_focus)
+
+    def add_dialog(self, codice):
+        dialog = Gtk.Dialog(title='Nuovo prodotto',
+                            transient_for=self, modal=True)
+        dialog.add_buttons('Annulla', Gtk.ResponseType.CANCEL,
+                           'Salva', Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+        grid.set_margin_top(12)
+        grid.set_margin_bottom(12)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        dialog.get_content_area().add(grid)
+
+        e_cod = Gtk.Entry(text=codice, hexpand=True)
+        e_nome = Gtk.Entry(hexpand=True)
+        e_nome.set_activates_default(True)
+        e_qta = Gtk.SpinButton.new_with_range(0, 1000000, 1)
+        e_qta.set_value(1)
+        grid.attach(Gtk.Label(label='Codice', xalign=0), 0, 0, 1, 1)
+        grid.attach(e_cod, 1, 0, 1, 1)
+        grid.attach(Gtk.Label(label='Nome', xalign=0), 0, 1, 1, 1)
+        grid.attach(e_nome, 1, 1, 1, 1)
+        grid.attach(Gtk.Label(label='Quantità', xalign=0), 0, 2, 1, 1)
+        grid.attach(e_qta, 1, 2, 1, 1)
+        dialog.show_all()
+        e_nome.grab_focus()
+
+        if dialog.run() == Gtk.ResponseType.OK:
+            cod = e_cod.get_text().strip()
+            nome = e_nome.get_text().strip()
+            qta = e_qta.get_value_as_int()
+            if cod:
+                try:
+                    self.db.add(cod, nome, qta)
+                    self.flash('Aggiunto: %s (%d pz)' % (nome or cod, qta))
+                    self.refresh()
+                except sqlite3.IntegrityError:
+                    self.flash('Codice già presente: %s' % cod, ok=False)
+        dialog.destroy()
+        GLib.idle_add(self.entry.grab_focus)
+
+    def on_key(self, widget, event):
+        if event.keyval == Gdk.KEY_Escape:
+            Gtk.main_quit()  # back to the launcher
+        return False
+
+
+def main():
+    provider = Gtk.CssProvider()
+    provider.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(), provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    win = Inventory(Database())
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Magazzino
+Comment=Gestione quantità prodotti con lettore barcode
+Icon=view-list
+Exec=dk2-inventory
+Categories=Office;
