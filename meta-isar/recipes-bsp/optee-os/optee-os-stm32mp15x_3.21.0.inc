@@ -13,7 +13,7 @@ DEBIAN_BUILD_DEPENDS += ", device-tree-compiler, python3-cryptography:native"
 OPTEE_PLATFORM = "stm32mp1"
 OPTEE_EXTRA_BUILDARGS = " \
     TEE_IMPL_VERSION=${PV} \
-    ARCH=arm CFG_EMBED_DTB_SOURCE_FILE=stm32mp157c-ev1.dts \
+    ARCH=arm CFG_EMBED_DTB_SOURCE_FILE=stm32mp157c-dk2.dts \
     CFG_TEE_CORE_LOG_LEVEL=2"
 OPTEE_BINARIES = "tee-header_v2.stm32 tee-pageable_v2.stm32 tee-pager_v2.stm32"
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=wvkbd Virtual Keyboard
+After=weston.service
+Requires=weston.service
+
+[Service]
+Environment=XDG_RUNTIME_DIR=/run/weston
+# Must match weston's pinned --socket name and runtime dir (see weston.service:
+# /run/weston, not the logind-managed /run/user/0). weston creates the socket a
+# moment after the service is "started", so wait for it before launching wvkbd
+# to avoid a connect-before-ready crash-loop.
+Environment=WAYLAND_DISPLAY=wayland-1
+ExecStartPre=/bin/sh -c 'until [ -S /run/weston/wayland-1 ]; do sleep 1; done'
+ExecStart=/usr/bin/wvkbd-mobintl
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -17,3 +17,7 @@ bblayers_conf_header:
   standard: |
     BBPATH = "${TOPDIR}"
     BBFILES ?= ""
+machine: stm32mp15x
+distro: debian-bookworm
+target: isar-image-base
+

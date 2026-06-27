@@ -7,6 +7,8 @@ inherit optee-os
 
 MAINTAINER = "isar-users <isar-users@googlegroups.com>"
 
+OPTEE_NAME = "stm32mp15x"
+
 require optee-os-stm32mp15x_${PV}.inc
 
 # optee-examples integration

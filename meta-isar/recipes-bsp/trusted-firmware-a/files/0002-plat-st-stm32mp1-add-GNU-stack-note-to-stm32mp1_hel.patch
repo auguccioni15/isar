@@ -1,0 +1,24 @@
+From: Andrea <auguccioni15@gmail.com>
+Date: Thu, 01 May 2026 00:00:00 +0000
+Subject: [PATCH] plat/st/stm32mp1: add .note.GNU-stack to stm32mp1_helper.S
+
+binutils 2.40 treats the missing .note.GNU-stack section as a linker
+warning, and TF-A builds with -Wl,--fatal-warnings, so the warning
+becomes a fatal error when linking bl2.elf.
+
+Add an explicit .note.GNU-stack section with %progbits to declare a
+non-executable stack and silence the linker warning.
+
+Signed-off-by: Andrea <auguccioni15@gmail.com>
+---
+ plat/st/stm32mp1/stm32mp1_helper.S | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/plat/st/stm32mp1/stm32mp1_helper.S b/plat/st/stm32mp1/stm32mp1_helper.S
+--- a/plat/st/stm32mp1/stm32mp1_helper.S
++++ b/plat/st/stm32mp1/stm32mp1_helper.S
+@@ -254,3 +254,5 @@ end_error_str:
+ 	.asciz "\n\r"
+ #endif
++
++	.section	.note.GNU-stack,"",%progbits

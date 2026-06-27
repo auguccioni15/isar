@@ -1,0 +1,34 @@
+[Unit]
+Description=Weston Wayland Compositor
+# The LTDC display controller and the Etnaviv GPU each claim a /dev/dri/cardN,
+# and the numbering is NOT stable (it depends on probe / module-load order).
+# Resolve the LTDC card from its stable by-path symlink instead of hardcoding
+# a number, and poll for it directly: the systemd device unit can time out
+# before LTDC finishes its (deferred) probe.
+After=local-fs.target
+
+[Service]
+# Use a dedicated runtime dir, NOT /run/user/0: the latter is the per-user
+# directory managed by systemd-logind, which mounts a fresh tmpfs over it the
+# moment anyone opens a session (SSH/console login). weston starts at boot and
+# binds wayland-1 in /run/user/0 before any login; a later login then shadows
+# weston's socket with logind's tmpfs, so the socket vanishes for every other
+# process (ss still shows the bind path, but ls/connect get ENOENT) and all
+# wayland clients crash-loop with "failed to connect to Wayland display: No
+# such file or directory". /run/weston is plain and logind never touches it.
+Environment=XDG_RUNTIME_DIR=/run/weston
+ExecStartPre=/bin/mkdir -p /run/weston
+ExecStartPre=/bin/chmod 700 /run/weston
+ExecStartPre=/bin/sh -c 'until [ -e /dev/dri/by-path/platform-5a001000.display-controller-card ]; do sleep 1; done'
+ExecStartPre=/bin/sleep 2
+# Pin the Wayland socket name explicitly (--socket=wayland-1). Without it
+# weston auto-picks the first free wayland-N, which drifts to wayland-1 after
+# a restart leaves a stale wayland-0 lock in /run/weston — wvkbd then connects
+# to the wrong socket and crash-loops. wvkbd.service hardcodes the same name.
+ExecStart=/bin/sh -c 'exec /usr/bin/weston --backend=drm-backend.so --tty=2 --drm-device="$(basename "$(readlink -f /dev/dri/by-path/platform-5a001000.display-controller-card)")" --use-pixman --socket=wayland-1'
+Restart=on-failure
+StandardInput=tty
+TTYPath=/dev/tty2
+
+[Install]
+WantedBy=multi-user.target

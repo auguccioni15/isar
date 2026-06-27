@@ -1,0 +1,12 @@
+header:
+  version: 14
+  includes:
+    - isar.yaml
+
+machine: stm32mp157c-dk2
+distro: debian-bookworm
+target: isar-image-base
+
+local_conf_header:
+  stm32mp_multiconfig: |
+    BBMULTICONFIG = "stm32mp157c-dk2-bookworm"

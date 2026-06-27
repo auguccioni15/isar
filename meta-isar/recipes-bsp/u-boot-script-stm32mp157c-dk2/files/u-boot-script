@@ -1,0 +1,25 @@
+# Root filesystem partition (set by U-Boot distro_bootpart)
+ROOT_PARTITION="${distro_bootpart}"
+
+# Kernel command line arguments for STM32MP157C-DK2
+# root=LABEL=rootfs: ext4 filesystem label set by WKS --label rootfs (not GPT PARTLABEL)
+# earlycon: DT-based (stdout-path); the explicit stm32_serial form fails with OP-TEE dk2 DTS
+# NOTE: 'nomodeset' was removed — it forces the kernel into a generic "safe
+# graphics" framebuffer (no KMS mode-setting), so the boot console (fbcon) on
+# the DSI panel rendered with the wrong pixel format (blue-tinted, "safe mode"
+# look). Without it the LTDC/DSI KMS driver sets the correct mode and the
+# console colours are right; weston was already fine because it mode-sets from
+# userspace. 'initcall_debug'/'ignore_loglevel' were bring-up debug spam.
+KERNEL_ARGS="root=LABEL=rootfs rootwait rw console=ttySTM0,115200 earlycon clk_ignore_unused panic=60"
+
+# No device tree overlays needed
+OVERLAYS=""
+
+# Include initrd if present
+NO_INITRD=""
+
+# No U-Boot commands to prepend
+SCRIPT_PREPEND=""
+
+# Use DTB from bootfs, not U-Boot built-in
+BUILTIN_DT="no"
