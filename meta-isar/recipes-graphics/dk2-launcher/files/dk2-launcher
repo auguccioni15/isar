@@ -15,10 +15,12 @@ import subprocess
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gio, Gdk  # noqa: E402
+from gi.repository import Gtk, Gio, Gdk, GdkPixbuf, GLib  # noqa: E402
 
 APPS_DIR = '/etc/dk2-launcher/apps'
-ICON_SIZE = 96
+# Tile icons are rendered at this exact size (width x height, px).
+ICON_WIDTH = 40
+ICON_HEIGHT = 30
 COLUMNS = 3
 
 CSS = b"""
@@ -86,6 +88,29 @@ class Launcher(Gtk.Window):
         scroller.add(flow)
         self.add(scroller)
 
+    @staticmethod
+    def load_icon_pixbuf(icon):
+        # Render the themed icon to an exact ICON_WIDTH x ICON_HEIGHT pixbuf.
+        # Gtk.Image.set_pixel_size() only does square icons, so look the icon
+        # up in the theme and scale the pixbuf ourselves to honour the
+        # non-square tile size.
+        theme = Gtk.IconTheme.get_default()
+        size = max(ICON_WIDTH, ICON_HEIGHT)
+        icon_info = None
+        if icon is not None:
+            icon_info = theme.lookup_by_gicon(icon, size, 0)
+        if icon_info is None:
+            icon_info = theme.lookup_icon(
+                'application-x-executable', size, 0)
+        if icon_info is None:
+            return None
+        try:
+            pixbuf = icon_info.load_icon()
+        except GLib.Error:
+            return None
+        return pixbuf.scale_simple(
+            ICON_WIDTH, ICON_HEIGHT, GdkPixbuf.InterpType.BILINEAR)
+
     def make_tile(self, info):
         button = Gtk.Button()
         button.get_style_context().add_class('dk2-tile')
@@ -94,13 +119,13 @@ class Launcher(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
         image = Gtk.Image()
-        icon = info.get_icon()
-        if icon is not None:
-            image.set_from_gicon(icon, Gtk.IconSize.DIALOG)
+        pixbuf = self.load_icon_pixbuf(info.get_icon())
+        if pixbuf is not None:
+            image.set_from_pixbuf(pixbuf)
         else:
             image.set_from_icon_name(
                 'application-x-executable', Gtk.IconSize.DIALOG)
-        image.set_pixel_size(ICON_SIZE)
+            image.set_pixel_size(max(ICON_WIDTH, ICON_HEIGHT))
 
         label = Gtk.Label(label=info.get_display_name())
         label.get_style_context().add_class('dk2-label')
@@ -121,12 +146,33 @@ class Launcher(Gtk.Window):
         argv = [a for a in shlex.split(cmdline)
                 if not (len(a) == 2 and a[0] == '%')]  # drop %U %f %i ...
         if not argv:
+            print('dk2-launcher: no Exec line for %s'
+                  % info.get_display_name(), flush=True)
             return
+        print('dk2-launcher: launching %s' % argv, flush=True)
         try:
-            subprocess.Popen(argv, env=os.environ.copy())
+            # start_new_session detaches the child into its own session so it
+            # is not tied to the launcher's controlling tty and survives on
+            # its own.
+            proc = subprocess.Popen(argv, env=os.environ.copy(),
+                                    start_new_session=True)
         except OSError as exc:
             print('dk2-launcher: failed to launch %s: %s' % (argv, exc),
                   flush=True)
+            return
+        # A Wayland client that crashes on startup returns from Popen just
+        # fine, so "the tile flashes but nothing appears" looks identical to
+        # a successful launch. Check back shortly and log a non-zero early
+        # exit so the real failure shows up in `journalctl -u dk2-launcher`.
+        GLib.timeout_add(800, self._report_early_exit, proc, argv)
+
+    @staticmethod
+    def _report_early_exit(proc, argv):
+        rc = proc.poll()
+        if rc is not None and rc != 0:
+            print('dk2-launcher: %s exited immediately (code %d)'
+                  % (argv, rc), flush=True)
+        return False  # one-shot timeout
 
     def on_key(self, widget, event):
         if event.keyval in (Gdk.KEY_Escape, Gdk.KEY_F5):

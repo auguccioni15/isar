@@ -4,13 +4,14 @@ After=weston.service
 Requires=weston.service
 
 [Service]
-Environment=XDG_RUNTIME_DIR=/run/user/0
-# Must match weston's pinned --socket name (see weston.service). Wait for
-# the socket to appear before starting so the launcher doesn't crash-loop
-# trying to connect before weston has created it.
+Environment=XDG_RUNTIME_DIR=/run/weston
+# Must match weston's pinned --socket name and runtime dir (see weston.service:
+# /run/weston, not the logind-managed /run/user/0). Wait for the socket to
+# appear before starting so the launcher doesn't crash-loop trying to connect
+# before weston has created it.
 Environment=WAYLAND_DISPLAY=wayland-1
 Environment=GDK_BACKEND=wayland
-ExecStartPre=/bin/sh -c 'until [ -S /run/user/0/wayland-1 ]; do sleep 1; done'
+ExecStartPre=/bin/sh -c 'until [ -S /run/weston/wayland-1 ]; do sleep 1; done'
 ExecStart=/usr/bin/dk2-launcher
 Restart=always
 RestartSec=2

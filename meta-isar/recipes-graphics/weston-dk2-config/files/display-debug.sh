@@ -136,8 +136,10 @@ systemctl cat weston.service 2>/dev/null | grep -E 'ExecStart|drm-device|backend
 
 sec "PROCESSES / RUNTIME DIR"
 ps -ef 2>/dev/null | grep -E 'weston|wvkbd|Xwayland' | grep -v grep
-echo "--- XDG_RUNTIME_DIR ---"
+echo "--- XDG_RUNTIME_DIR (weston uses /run/weston, not logind's /run/user/0) ---"
+ls -l /run/weston/ 2>/dev/null
 ls -l /run/user/0/ 2>/dev/null
+ss -xlp 2>/dev/null | grep -i wayland
 
 sec "FRAMEBUFFER / BACKLIGHT"
 ls -l /dev/fb* 2>/dev/null || echo "(no /dev/fb*)"

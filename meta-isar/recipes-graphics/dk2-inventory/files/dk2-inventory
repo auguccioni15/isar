@@ -60,6 +60,10 @@ class Database:
         self.conn.commit()
         return nuova
 
+    def delete(self, codice):
+        self.conn.execute('DELETE FROM prodotti WHERE codice = ?', (codice,))
+        self.conn.commit()
+
     def list_all(self):
         cur = self.conn.execute(
             'SELECT codice, nome, quantita FROM prodotti '
@@ -69,6 +73,7 @@ class Database:
 
 CSS = b"""
 .mode-toggle { padding: 12px 8px; font-size: 17px; font-weight: bold; }
+.close-btn { padding: 4px 14px; font-size: 20px; font-weight: bold; }
 """
 
 
@@ -91,6 +96,16 @@ class Inventory(Gtk.Window):
         # vertically: a single horizontal toolbar would force a window minimum
         # width well over 480 and weston rejects an oversized fullscreen
         # surface with a protocol error.
+
+        # --- top bar: title + close button. The touchscreen has no Esc key,
+        # so this ✕ is the on-screen way to quit back to the launcher. ---
+        topbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        root.pack_start(topbar, False, False, 0)
+        topbar.pack_start(Gtk.Label(label='Magazzino', xalign=0), True, True, 0)
+        close_btn = Gtk.Button(label='✕')
+        close_btn.get_style_context().add_class('close-btn')
+        close_btn.connect('clicked', lambda b: Gtk.main_quit())
+        topbar.pack_end(close_btn, False, False, 0)
 
         # --- row 1: CARICO/SCARICO toggle ---
         modes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
@@ -131,21 +146,39 @@ class Inventory(Gtk.Window):
         # --- product list ---
         self.store = Gtk.ListStore(str, str, int)
         self.tree = Gtk.TreeView(model=self.store)
+        # FIXED column widths + ellipsis on the name: a long product name must
+        # never push a column's (and thus the toplevel's) minimum width past
+        # the 480 px panel, or weston rejects the oversized fullscreen surface
+        # with a protocol error ("buffer 801x800 ...") and GTK aborts with
+        # "Gtk couldn't be initialized". Widths sum < 480.
+        widths = (110, 220, 90)
         for i, title in enumerate(('Codice', 'Nome', 'Quantità')):
             renderer = Gtk.CellRendererText()
             if i == 2:
                 renderer.set_property('xalign', 1.0)
+            if i == 1:
+                renderer.set_property('ellipsize', Pango.EllipsizeMode.END)
             col = Gtk.TreeViewColumn(title, renderer, text=i)
+            col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+            col.set_fixed_width(widths[i])
             col.set_expand(i == 1)
             self.tree.append_column(col)
+        # Tap a row to open its detail card (where it can be deleted). The
+        # touchscreen has no right-click/Delete key, so row activation is the
+        # way in without spending scarce horizontal space on another button.
+        self.tree.connect('row-activated', self.on_row_activated)
         scroller = Gtk.ScrolledWindow()
-        # AUTOMATIC on both axes: the list scrolls instead of forcing the
-        # window wider than the 480 px panel.
+        # AUTOMATIC on both axes + zero minimum content width: the TreeView's
+        # natural width never propagates up to the toplevel, so the fullscreen
+        # surface always fits the 480 px panel; the list scrolls instead.
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_min_content_width(0)
+        scroller.set_propagate_natural_width(False)
         scroller.add(self.tree)
         root.pack_start(scroller, True, True, 0)
 
         self.refresh()
+        self.flash('Tocca un prodotto per eliminarlo')
         GLib.idle_add(self.entry.grab_focus)
 
     @property
@@ -222,6 +255,55 @@ class Inventory(Gtk.Window):
                 except sqlite3.IntegrityError:
                     self.flash('Codice già presente: %s' % cod, ok=False)
         dialog.destroy()
+        GLib.idle_add(self.entry.grab_focus)
+
+    def on_row_activated(self, tree, path, column):
+        row = self.store[path]
+        self.product_dialog(row[0], row[1], row[2])
+
+    def product_dialog(self, codice, nome, quantita):
+        dialog = Gtk.Dialog(title='Prodotto', transient_for=self, modal=True)
+        dialog.add_button('Elimina', Gtk.ResponseType.REJECT)
+        dialog.add_button('Chiudi', Gtk.ResponseType.CLOSE)
+        dialog.set_default_response(Gtk.ResponseType.CLOSE)
+
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+        grid.set_margin_top(12)
+        grid.set_margin_bottom(12)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        for r, (label, value) in enumerate(
+                (('Codice', codice),
+                 ('Nome', nome or '—'),
+                 ('Quantità', str(quantita)))):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, r, 1, 1)
+            # Ellipsize the value so a long name can't widen the dialog past
+            # the 480 px panel (same constraint as the main window).
+            val = Gtk.Label(label=value, xalign=0)
+            val.set_ellipsize(Pango.EllipsizeMode.END)
+            val.set_max_width_chars(22)
+            grid.attach(val, 1, r, 1, 1)
+        dialog.get_content_area().add(grid)
+        dialog.show_all()
+
+        deleted = False
+        if dialog.run() == Gtk.ResponseType.REJECT:
+            # Deletion is irreversible, so require an explicit confirmation —
+            # a stray tap on a row must not wipe a product.
+            confirm = Gtk.MessageDialog(
+                transient_for=dialog, modal=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text='Eliminare "%s"?' % (nome or codice))
+            confirm.format_secondary_text("L'operazione non è reversibile.")
+            if confirm.run() == Gtk.ResponseType.YES:
+                self.db.delete(codice)
+                deleted = True
+            confirm.destroy()
+        dialog.destroy()
+        if deleted:
+            self.flash('Eliminato: %s' % (nome or codice))
+            self.refresh()
         GLib.idle_add(self.entry.grab_focus)
 
     def on_key(self, widget, event):
