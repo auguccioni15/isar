@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+# dk2-inventory — minimal warehouse stock tracker for the STM32MP157 DK2.
+#
+# A USB barcode scanner (IR/laser, "keyboard wedge") behaves as a keyboard:
+# it types the scanned code and presses Enter. This app keeps an always-
+# focused entry that captures those scans and, depending on the CARICO /
+# SCARICO mode, increments or decrements the product quantity in a small
+# SQLite database. Unknown codes pop up a dialog to register a new product.
+#
+# Data lives in /var/lib/dk2-inventory/inventory.db (persists across reboots).
+
+import os
+import sqlite3
+import gi
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib, Pango  # noqa: E402
+
+DB_DIR = '/var/lib/dk2-inventory'
+DB_PATH = os.path.join(DB_DIR, 'inventory.db')
+
+
+class Database:
+    def __init__(self, path=DB_PATH):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.conn = sqlite3.connect(path)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(
+            'CREATE TABLE IF NOT EXISTS prodotti ('
+            '  codice TEXT PRIMARY KEY,'
+            "  nome TEXT NOT NULL DEFAULT '',"
+            '  quantita INTEGER NOT NULL DEFAULT 0,'
+            '  aggiornato TEXT'
+            ')')
+        self.conn.commit()
+
+    def get(self, codice):
+        cur = self.conn.execute(
+            'SELECT * FROM prodotti WHERE codice = ?', (codice,))
+        return cur.fetchone()
+
+    def add(self, codice, nome, quantita):
+        self.conn.execute(
+            'INSERT INTO prodotti (codice, nome, quantita, aggiornato) '
+            "VALUES (?, ?, ?, datetime('now', 'localtime'))",
+            (codice, nome, quantita))
+        self.conn.commit()
+
+    def adjust(self, codice, delta):
+        cur = self.conn.execute(
+            'SELECT quantita FROM prodotti WHERE codice = ?', (codice,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        nuova = max(0, row['quantita'] + delta)
+        self.conn.execute(
+            'UPDATE prodotti SET quantita = ?, '
+            "aggiornato = datetime('now', 'localtime') WHERE codice = ?",
+            (nuova, codice))
+        self.conn.commit()
+        return nuova
+
+    def delete(self, codice):
+        self.conn.execute('DELETE FROM prodotti WHERE codice = ?', (codice,))
+        self.conn.commit()
+
+    def list_all(self):
+        cur = self.conn.execute(
+            'SELECT codice, nome, quantita FROM prodotti '
+            'ORDER BY nome, codice')
+        return cur.fetchall()
+
+
+CSS = b"""
+.mode-toggle { padding: 12px 8px; font-size: 17px; font-weight: bold; }
+.close-btn { padding: 4px 14px; font-size: 20px; font-weight: bold; }
+"""
+
+
+class Inventory(Gtk.Window):
+    def __init__(self, db):
+        super().__init__(title='Magazzino')
+        self.db = db
+        self.connect('destroy', Gtk.main_quit)
+        self.connect('key-press-event', self.on_key)
+        self.fullscreen()
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        root.set_margin_top(16)
+        root.set_margin_bottom(16)
+        root.set_margin_start(16)
+        root.set_margin_end(16)
+        self.add(root)
+
+        # The DK2 panel is 480x800 (narrow portrait), so lay the controls out
+        # vertically: a single horizontal toolbar would force a window minimum
+        # width well over 480 and weston rejects an oversized fullscreen
+        # surface with a protocol error.
+
+        # --- top bar: title + close button. The touchscreen has no Esc key,
+        # so this ✕ is the on-screen way to quit back to the launcher. ---
+        topbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        root.pack_start(topbar, False, False, 0)
+        topbar.pack_start(Gtk.Label(label='Magazzino', xalign=0), True, True, 0)
+        close_btn = Gtk.Button(label='✕')
+        close_btn.get_style_context().add_class('close-btn')
+        close_btn.connect('clicked', lambda b: Gtk.main_quit())
+        topbar.pack_end(close_btn, False, False, 0)
+
+        # --- row 1: CARICO/SCARICO toggle ---
+        modes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                        homogeneous=True)
+        root.pack_start(modes, False, False, 0)
+
+        self.btn_carico = Gtk.RadioButton.new_with_label_from_widget(
+            None, 'CARICO +1')
+        self.btn_scarico = Gtk.RadioButton.new_with_label_from_widget(
+            self.btn_carico, 'SCARICO -1')
+        for b in (self.btn_carico, self.btn_scarico):
+            b.set_mode(False)  # render as toggle buttons, not radio dots
+            b.get_style_context().add_class('mode-toggle')
+        self.btn_carico.set_active(True)
+        modes.pack_start(self.btn_carico, True, True, 0)
+        modes.pack_start(self.btn_scarico, True, True, 0)
+
+        # --- row 2: code entry + add button ---
+        codebar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        root.pack_start(codebar, False, False, 0)
+
+        self.entry = Gtk.Entry()
+        self.entry.set_width_chars(6)
+        self.entry.set_placeholder_text('Codice…')
+        self.entry.connect('activate', self.on_scan)
+        codebar.pack_start(self.entry, True, True, 0)
+
+        add_btn = Gtk.Button(label='+ Prodotto')
+        add_btn.connect('clicked', lambda b: self.add_dialog(''))
+        codebar.pack_start(add_btn, False, False, 0)
+
+        # --- feedback line --- (ellipsize so a long product name can't
+        # widen the window past the 480 px panel)
+        self.feedback = Gtk.Label(xalign=0)
+        self.feedback.set_ellipsize(Pango.EllipsizeMode.END)
+        root.pack_start(self.feedback, False, False, 0)
+
+        # --- product list ---
+        self.store = Gtk.ListStore(str, str, int)
+        self.tree = Gtk.TreeView(model=self.store)
+        # FIXED column widths + ellipsis on the name: a long product name must
+        # never push a column's (and thus the toplevel's) minimum width past
+        # the 480 px panel, or weston rejects the oversized fullscreen surface
+        # with a protocol error ("buffer 801x800 ...") and GTK aborts with
+        # "Gtk couldn't be initialized". Widths sum < 480.
+        widths = (110, 220, 90)
+        for i, title in enumerate(('Codice', 'Nome', 'Quantità')):
+            renderer = Gtk.CellRendererText()
+            if i == 2:
+                renderer.set_property('xalign', 1.0)
+            if i == 1:
+                renderer.set_property('ellipsize', Pango.EllipsizeMode.END)
+            col = Gtk.TreeViewColumn(title, renderer, text=i)
+            col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+            col.set_fixed_width(widths[i])
+            col.set_expand(i == 1)
+            self.tree.append_column(col)
+        # Tap a row to open its detail card (where it can be deleted). The
+        # touchscreen has no right-click/Delete key, so row activation is the
+        # way in without spending scarce horizontal space on another button.
+        self.tree.connect('row-activated', self.on_row_activated)
+        scroller = Gtk.ScrolledWindow()
+        # AUTOMATIC on both axes + zero minimum content width: the TreeView's
+        # natural width never propagates up to the toplevel, so the fullscreen
+        # surface always fits the 480 px panel; the list scrolls instead.
+        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_min_content_width(0)
+        scroller.set_propagate_natural_width(False)
+        scroller.add(self.tree)
+        root.pack_start(scroller, True, True, 0)
+
+        self.refresh()
+        self.flash('Tocca un prodotto per eliminarlo')
+        GLib.idle_add(self.entry.grab_focus)
+
+    @property
+    def carico(self):
+        return self.btn_carico.get_active()
+
+    def refresh(self):
+        self.store.clear()
+        for row in self.db.list_all():
+            self.store.append([row['codice'], row['nome'], row['quantita']])
+
+    def flash(self, text, ok=True):
+        color = '#2e7d32' if ok else '#c62828'
+        self.feedback.set_markup(
+            '<span size="xx-large" weight="bold" color="%s">%s</span>'
+            % (color, GLib.markup_escape_text(text)))
+
+    def on_scan(self, entry):
+        codice = entry.get_text().strip()
+        entry.set_text('')
+        if not codice:
+            return
+        prod = self.db.get(codice)
+        if prod is None:
+            self.add_dialog(codice)
+        else:
+            delta = 1 if self.carico else -1
+            nuova = self.db.adjust(codice, delta)
+            verbo = 'Carico' if delta > 0 else 'Scarico'
+            self.flash('%s  •  %s  →  %d pz'
+                       % (verbo, prod['nome'] or codice, nuova))
+            self.refresh()
+        GLib.idle_add(entry.grab_focus)
+
+    def add_dialog(self, codice):
+        dialog = Gtk.Dialog(title='Nuovo prodotto',
+                            transient_for=self, modal=True)
+        dialog.add_buttons('Annulla', Gtk.ResponseType.CANCEL,
+                           'Salva', Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+        grid.set_margin_top(12)
+        grid.set_margin_bottom(12)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        dialog.get_content_area().add(grid)
+
+        e_cod = Gtk.Entry(text=codice, hexpand=True)
+        e_cod.set_width_chars(14)
+        e_nome = Gtk.Entry(hexpand=True)
+        e_nome.set_width_chars(14)
+        e_nome.set_activates_default(True)
+        e_qta = Gtk.SpinButton.new_with_range(0, 1000000, 1)
+        e_qta.set_value(1)
+        grid.attach(Gtk.Label(label='Codice', xalign=0), 0, 0, 1, 1)
+        grid.attach(e_cod, 1, 0, 1, 1)
+        grid.attach(Gtk.Label(label='Nome', xalign=0), 0, 1, 1, 1)
+        grid.attach(e_nome, 1, 1, 1, 1)
+        grid.attach(Gtk.Label(label='Quantità', xalign=0), 0, 2, 1, 1)
+        grid.attach(e_qta, 1, 2, 1, 1)
+        dialog.show_all()
+        e_nome.grab_focus()
+
+        if dialog.run() == Gtk.ResponseType.OK:
+            cod = e_cod.get_text().strip()
+            nome = e_nome.get_text().strip()
+            qta = e_qta.get_value_as_int()
+            if cod:
+                try:
+                    self.db.add(cod, nome, qta)
+                    self.flash('Aggiunto: %s (%d pz)' % (nome or cod, qta))
+                    self.refresh()
+                except sqlite3.IntegrityError:
+                    self.flash('Codice già presente: %s' % cod, ok=False)
+        dialog.destroy()
+        GLib.idle_add(self.entry.grab_focus)
+
+    def on_row_activated(self, tree, path, column):
+        row = self.store[path]
+        self.product_dialog(row[0], row[1], row[2])
+
+    def product_dialog(self, codice, nome, quantita):
+        dialog = Gtk.Dialog(title='Prodotto', transient_for=self, modal=True)
+        dialog.add_button('Elimina', Gtk.ResponseType.REJECT)
+        dialog.add_button('Chiudi', Gtk.ResponseType.CLOSE)
+        dialog.set_default_response(Gtk.ResponseType.CLOSE)
+
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+        grid.set_margin_top(12)
+        grid.set_margin_bottom(12)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        for r, (label, value) in enumerate(
+                (('Codice', codice),
+                 ('Nome', nome or '—'),
+                 ('Quantità', str(quantita)))):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, r, 1, 1)
+            # Ellipsize the value so a long name can't widen the dialog past
+            # the 480 px panel (same constraint as the main window).
+            val = Gtk.Label(label=value, xalign=0)
+            val.set_ellipsize(Pango.EllipsizeMode.END)
+            val.set_max_width_chars(22)
+            grid.attach(val, 1, r, 1, 1)
+        dialog.get_content_area().add(grid)
+        dialog.show_all()
+
+        deleted = False
+        if dialog.run() == Gtk.ResponseType.REJECT:
+            # Deletion is irreversible, so require an explicit confirmation —
+            # a stray tap on a row must not wipe a product.
+            confirm = Gtk.MessageDialog(
+                transient_for=dialog, modal=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text='Eliminare "%s"?' % (nome or codice))
+            confirm.format_secondary_text("L'operazione non è reversibile.")
+            if confirm.run() == Gtk.ResponseType.YES:
+                self.db.delete(codice)
+                deleted = True
+            confirm.destroy()
+        dialog.destroy()
+        if deleted:
+            self.flash('Eliminato: %s' % (nome or codice))
+            self.refresh()
+        GLib.idle_add(self.entry.grab_focus)
+
+    def on_key(self, widget, event):
+        if event.keyval == Gdk.KEY_Escape:
+            Gtk.main_quit()  # back to the launcher
+        return False
+
+
+def main():
+    # Create the window first: that triggers GTK init and opens the display,
+    # so the window has a valid GdkScreen. Calling Gdk.Screen.get_default()
+    # before any widget exists returns None and crashes add_provider_for_screen.
+    win = Inventory(Database())
+
+    provider = Gtk.CssProvider()
+    provider.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(
+        win.get_screen(), provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+# import-articoli — importa in blocco articoli nel database di dk2-inventory.
+#
+# Legge un file CSV con gli articoli e li inserisce/aggiorna nella tabella
+# "prodotti" dello stesso database usato dall'app (inventory.db).
+#
+# Formato CSV (intestazione opzionale, separatore , o ;):
+#
+#     codice,nome,quantita
+#     8001234567890,Vite M4x20,150
+#     8009876543210,Dado M4,300
+#     5012345678900,Rondella piana M4
+#
+# La colonna "quantita" è opzionale: se manca o è vuota vale 0.
+#
+# Uso:
+#     ./import-articoli articoli.csv
+#     ./import-articoli articoli.csv --db /percorso/inventory.db
+#     ./import-articoli articoli.csv --aggiorna   # somma alle quantità esistenti
+#
+# Senza --aggiorna un codice già presente viene sovrascritto (nome+quantità).
+
+import argparse
+import csv
+import os
+import sqlite3
+import sys
+
+DB_PATH = '/var/lib/dk2-inventory/inventory.db'
+
+
+def apri_db(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        'CREATE TABLE IF NOT EXISTS prodotti ('
+        '  codice TEXT PRIMARY KEY,'
+        "  nome TEXT NOT NULL DEFAULT '',"
+        '  quantita INTEGER NOT NULL DEFAULT 0,'
+        '  aggiornato TEXT'
+        ')')
+    conn.commit()
+    return conn
+
+
+def leggi_articoli(path):
+    """Restituisce una lista di (codice, nome, quantita) dal file CSV."""
+    with open(path, newline='', encoding='utf-8-sig') as f:
+        campione = f.read(4096)
+        f.seek(0)
+        # Rileva il separatore (virgola o punto e virgola).
+        try:
+            dialetto = csv.Sniffer().sniff(campione, delimiters=',;\t')
+        except csv.Error:
+            dialetto = csv.excel
+        reader = csv.reader(f, dialetto)
+        articoli = []
+        for n, riga in enumerate(reader, 1):
+            if not riga or all(not c.strip() for c in riga):
+                continue
+            codice = riga[0].strip()
+            # Salta una eventuale riga di intestazione.
+            if n == 1 and codice.lower() in ('codice', 'code', 'barcode', 'ean'):
+                continue
+            if not codice:
+                print('riga %d: codice mancante, saltata' % n, file=sys.stderr)
+                continue
+            nome = riga[1].strip() if len(riga) > 1 else ''
+            quantita = 0
+            if len(riga) > 2 and riga[2].strip():
+                try:
+                    quantita = int(riga[2].strip())
+                except ValueError:
+                    print('riga %d: quantità non valida (%r), uso 0'
+                          % (n, riga[2]), file=sys.stderr)
+            articoli.append((codice, nome, quantita))
+    return articoli
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Importa articoli nel database di dk2-inventory.')
+    parser.add_argument('file', help='file CSV con gli articoli')
+    parser.add_argument('--db', default=DB_PATH,
+                        help='percorso del database (default: %s)' % DB_PATH)
+    parser.add_argument('--aggiorna', action='store_true',
+                        help='somma le quantità ai codici già presenti '
+                             'invece di sovrascrivere')
+    args = parser.parse_args()
+
+    if not os.path.exists(args.file):
+        print('File non trovato: %s' % args.file, file=sys.stderr)
+        return 1
+
+    articoli = leggi_articoli(args.file)
+    if not articoli:
+        print('Nessun articolo da importare.', file=sys.stderr)
+        return 1
+
+    conn = apri_db(args.db)
+    inseriti = aggiornati = 0
+    for codice, nome, quantita in articoli:
+        esiste = conn.execute(
+            'SELECT 1 FROM prodotti WHERE codice = ?', (codice,)).fetchone()
+        if args.aggiorna:
+            # UPSERT: somma alla quantità esistente, mantieni il nome se il
+            # CSV non ne fornisce uno nuovo.
+            conn.execute(
+                'INSERT INTO prodotti (codice, nome, quantita, aggiornato) '
+                "VALUES (?, ?, ?, datetime('now', 'localtime')) "
+                'ON CONFLICT(codice) DO UPDATE SET '
+                '  quantita = quantita + excluded.quantita,'
+                '  nome = CASE WHEN excluded.nome != \'\' '
+                '              THEN excluded.nome ELSE nome END,'
+                "  aggiornato = datetime('now', 'localtime')",
+                (codice, nome, quantita))
+        else:
+            conn.execute(
+                'INSERT INTO prodotti (codice, nome, quantita, aggiornato) '
+                "VALUES (?, ?, ?, datetime('now', 'localtime')) "
+                'ON CONFLICT(codice) DO UPDATE SET '
+                '  nome = excluded.nome,'
+                '  quantita = excluded.quantita,'
+                "  aggiornato = datetime('now', 'localtime')",
+                (codice, nome, quantita))
+        if esiste:
+            aggiornati += 1
+        else:
+            inseriti += 1
+    conn.commit()
+    conn.close()
+
+    print('Importazione completata: %d nuovi, %d aggiornati (%s)'
+          % (inseriti, aggiornati, args.db))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

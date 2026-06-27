@@ -32,6 +32,22 @@ do_prepare_build:append:stm32mp15x() {
         sed -i 's|#include <linux/clk.h>|#include <linux/bitfield.h>\n#include <linux/clk.h>|' "${DWC3}"
     fi
 
+    # OTM8009A DSI panel: backport two fixes from the v6.6-stm32mp driver that
+    # are missing at this v6.1 SRCREV and leave the DK2 panel dark even though
+    # the LTDC/DSI pipeline is fully up (CRTC active, correct 480x800@29.7 mode,
+    # zero FIFO underrun, panel driver bound, rails on). Verified by diffing
+    # against the known-good OpenSTLinux 6.6 driver that lights the same panel.
+    #   1. Add MIPI_DSI_MODE_NO_EOT_PACKET: without it the DSI emits EoT packets
+    #      and the OTM8009A never locks onto the video stream -> black.
+    #   2. Issue a real reset pulse (assert 20ms, de-assert 100ms) on resume.
+    #      The v6.1 driver only de-asserts reset, so the panel controller is
+    #      never reset before its DCS init sequence runs.
+    PANEL="${S}/drivers/gpu/drm/panel/panel-orisetech-otm8009a.c"
+    if [ -f "${PANEL}" ] && ! grep -q "MIPI_DSI_MODE_NO_EOT_PACKET" "${PANEL}"; then
+        sed -i 's@MIPI_DSI_CLOCK_NON_CONTINUOUS;@MIPI_DSI_CLOCK_NON_CONTINUOUS |\n\t\t\t  MIPI_DSI_MODE_NO_EOT_PACKET;@' "${PANEL}"
+        sed -i 's@\tgpiod_set_value_cansleep(ctx->reset_gpio, 0);@\tgpiod_set_value_cansleep(ctx->reset_gpio, 1);\n\tmsleep(20);\n\tgpiod_set_value_cansleep(ctx->reset_gpio, 0);@' "${PANEL}"
+    fi
+
     # v6.1 keeps STM32 DTS directly under arch/arm/boot/dts/
     DTS_DIR="${S}/arch/arm/boot/dts/st"
     [ -d "${DTS_DIR}" ] || DTS_DIR="${S}/arch/arm/boot/dts"
@@ -47,7 +63,7 @@ do_prepare_build:append:stm32mp15x() {
     fi
 
     # Disable SII902X HDMI bridge: it does not respond on I2C and keeps
-    # LTDC stuck in deferred probe. DSI (OTM8009A) is the only output used.
+    # LTDC stuck in deferred probe. DSI is the only output used.
     install -m 0644 ${WORKDIR}/stm32mp157c-dk2-no-hdmi.dtsi \
         "${DTS_DIR}/stm32mp157c-dk2-no-hdmi.dtsi"
     if ! grep -q "stm32mp157c-dk2-no-hdmi" "${DTS_DIR}/stm32mp157c-dk2.dts" 2>/dev/null; then
